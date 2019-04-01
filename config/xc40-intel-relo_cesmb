@@ -6,10 +6,6 @@
 
 # ---------------------------------------------------------------------
 # # Find the ESMF makefile fragment
-ifneq ($(origin ESMFMKFILE), environment)
-$(error Environment variable ESMFMKFILE was not set.)
-endif
-include $(ESMFMKFILE)
 # ---------------------------------------------------------------------
 
 # MACROS      DESCRIPTIONS:

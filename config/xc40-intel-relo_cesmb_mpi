@@ -1,0 +1,47 @@
+#
+# ---------------------------------------------------------------------
+# common definitions for Intel Linux/IFC, MPI, real*8
+#  on Zeus
+# ---------------------------------------------------------------------
+
+# ---------------------------------------------------------------------
+# # Find the ESMF makefile fragment
+# ---------------------------------------------------------------------
+
+# MACROS      DESCRIPTIONS:
+#
+# FC:         Fortran 90 compiler.
+# FCFFLAGS:   Fortran 90 compilation flags.
+# CC:         C compiler.
+# CCFLAGS:    C compilation flags.
+# CPP:        cpp preprocessor (may be implied by FC).
+# CPPFLAGS:   cpp -D macro flags.
+# LD:         Loader.
+# LDFLAGS:    Loader flags.
+# EXTRALIBS:  Extra local libraries (if any).
+#
+FC            =	ftn
+FCFFLAGS      = -traceback -xHost -O3 -fp-model precise -no-fma -ftz -align array64byte -r8 -warn nogeneral -diag-disable 10212 -mcmodel=small
+CC            =	cc
+CCFLAGS       =	-O -g 
+CPP           =	cpp -P
+CPPFLAGS      =	-DUSE_NUOPC_CESMBETA -DREAL8 -DMPI -DSERIAL_IO  -DTIMER -DRELO $(CPP_EXTRAS) 
+LD            =	$(FC)
+LDFLAGS       =	$(ESMF_F90LINKOPTS) $(ESMF_F90LINKPATHS) $(ESMF_F90LINKRPATHS) $(FCFFLAGS)
+EXTRALIBS     = $(ESMF_F90ESMFLINKLIBS)
+
+#
+# --- generic make definitions
+#
+SHELL         = /bin/sh
+RM            = \rm -f
+
+#
+# rules.
+#
+
+.c.o:
+	$(CC) $(CPPFLAGS) $(CCFLAGS)  -c $*.c
+
+.F90.o:
+	$(FC) $(CPPFLAGS) $(FCFFLAGS) -c $*.F90
