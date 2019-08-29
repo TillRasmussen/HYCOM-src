@@ -1078,7 +1078,7 @@
       type(ESMF_State)     :: expState
       type(ESMF_Clock)     :: extClock
       integer, intent(out) :: rc
-#elif defined(USE_NUOPC_CESMBETA) 
+#else  
       subroutine HYCOM_Init &
                   (mpiCommunicator,hycom_start_dtg,hycom_end_dtg, &
                    pointer_filename,restart_write)
@@ -1089,22 +1089,16 @@
       character*80, intent(in), optional :: pointer_filename
       logical,      intent(in), optional :: restart_write
       logical       restart_cpl
+#endif
+#if defined(USE_NUOPC_CESMBETA)
       real :: ssh_n,ssh_s,ssh_e,ssh_w,dhdx,dhdy
       real :: maskn,masks,maske,maskw
       real :: dp1,usur1,vsur1,psur1,dp2,usur2,vsur2,psur2,thksur, &
               utot,vtot
       integer :: mpi_comm_ocean,istat
 #elif defined (ESPC_COUPLE)
-      subroutine HYCOM_Init &
-                  (mpiCommunicator,hycom_start_dtg,hycom_end_dtg)
-      integer,      intent(in), optional :: mpiCommunicator
-      real,         intent(in), optional :: hycom_start_dtg
-      real,         intent(in), optional :: hycom_end_dtg
       integer :: mpi_comm_ocean,istat
-
-#else
-      subroutine HYCOM_Init
-#endif /* USE_ESMF4:USE_NUOPC_CESMBETA:else */
+#endif /* USE_NUOPC_CESMBETA:ESPC_COUPLE */
 !
 ! --- Initialize (before the 1st time step).
 !
@@ -1141,17 +1135,16 @@
 !
 ! --- initialize hycom message passing.
       call xcspmd(mpiCommunicator)
-#elif defined(USE_NUOPC_CESMBETA) || defined (ESPC_COUPLE)
-!
-! --- initialize hycom message passing.
-      call MPI_Comm_Dup(mpiCommunicator,mpi_comm_ocean,istat)
-      call xcspmd(mpi_comm_ocean)
 #else
-!
+! --- initialize hycom message passing.
+      if present(mpiCommunicator) then
+         call MPI_Comm_Dup(mpiCommunicator,mpi_comm_ocean,istat)
+         call xcspmd(mpi_comm_ocean)
+      else
 ! --- initialize SPMD processsing
       call xcspmd
-#endif /* USE_ESMF4:USE_NUOPC_CESMBETA:else */
-!
+      endif
+#endif
 ! --- initialize timer names.
 !
       call xctmrn(40,'cnuity')
@@ -1184,11 +1177,11 @@
       call machine
 !
 ! --- initialize scalars
-#if defined(USE_NUOPC_CESMBETA)
-      call blkdat(hycom_start_dtg)  !must call before zaiost
-#else
-      call blkdat  !must call before zaiost
-#endif
+      if (present(hycom_start_dtg)) then
+          call blkdat(hycom_start_dtg)  !must call before zaiost
+      else
+          call blkdat  !must call before zaiost
+      endif
 !
 ! --- initialize array i/o.
       call zaiost
@@ -1421,14 +1414,22 @@
       call forfundf
 !
 ! --- model is to be integrated from time step 'nstep1' to 'nstep2'
-#if   defined (USE_NUOPC_CESMBETA) || defined (ESPC_COUPLE)
-      if (present(hycom_start_dtg)) day1 = hycom_start_dtg
-      if (present(hycom_end_dtg  )) day2 = hycom_end_dtg
-#else
-      open( unit=uoff+99,file=trim(flnminp)//'limits')
-      read(      uoff+99,*) day1,day2
-      close(unit=uoff+99)
-#endif
+      if (present(hycom_start_dtg) .and. (present(hycom_end_dtg))) then
+         day1 = hycom_start_dtg
+         day2 = hycom_end_dtg
+      elseif (present(hycom_start_dtg) .or. (present(hycom_end_dtg)))
+        if (mnproc.eq.1) then
+         write(lp,'(/ a /)') 'error in hycom - Both optional parameters &
+               &''Must be p'
+         call flush(lp)
+        endif !1st tile
+        call xcstop('(hycom)')
+               stop '(hycom)'   !won't get here
+      else
+        open( unit=uoff+99,file=trim(flnminp)//'limits')
+        read(      uoff+99,*) day1,day2
+        close(unit=uoff+99)
+      endif
 ! --- non-positive day1 indicates a new initialization, or
 ! --- the start of a yrflag==3 case.
       linit =day1.le.0.0 
@@ -1532,7 +1533,6 @@
 !
 ! ---   start from restart file
 !
-#if  defined (USE_NUOPC_CESMBETA)
         restart_cpl = .false.
         if (present(pointer_filename)) then
           open(1,file=trim(pointer_filename),form='formatted', &
@@ -1544,11 +1544,6 @@
         flnmra = trim(flnmrsi)//'.a'
         flnmrb = trim(flnmrsi)//'.b'
         call restart_in(nstep0,dtime0, flnmra,flnmrb,restart_cpl)
-#else 
-        flnmra = trim(flnmrsi)//'.a'
-        flnmrb = trim(flnmrsi)//'.b'
-        call restart_in(nstep0,dtime0, flnmra,flnmrb)
-#endif
         surflx(:,:) = 0.0
         salflx(:,:) = 0.0
         wtrflx(:,:) = 0.0
@@ -1759,7 +1754,7 @@
           w2=0.0
           w3=0.0
 !!Alex no file flux on restart
-#if defined (USE_NUOPC_CESMBETA)
+#if defined (USE_NUOPC_CESMBETA) && defined (DMI_ATM_COUPLED)
           if (.not. (cpl_swflx  .and. cpl_lwmdnflx .and. cpl_lwmupflx &
               .and.  cpl_taux   .and. cpl_tauy     .and. cpl_precip)  &
               .and.  linit ) &
@@ -1987,29 +1982,29 @@
             maskn = 0.0
             masks = 0.0
             ! calculate the eastward slope
-            if (srfhgt(i-1,j).ne.0.0) then
+            if (ip(i-1,j).ne.0) then
               ssh_w = (srfhgt(i  ,j) - srfhgt(i-1,j))/(g*scux(i  ,j))
               maskw = 1.0
             endif
-            if (srfhgt(i+1,j).ne.0.0) then
+            if (ip(i+1,j).ne.0) then
               ssh_e = (srfhgt(i+1,j) - srfhgt(i  ,j))/(g*scux(i+1,j))
               maske = 1.0
             endif
 
-            if (ssh_e .ne.0.0 .or. ssh_w.ne.0.0) then
+            if ( maskw .eq.1.0 .or. maske .eq. 1.0 ) then
                 dhdx=(ssh_e+ssh_w)/(maskw+maske) !! on the p-grid
             endif
 
             ! calculate the northward slope
-           if (srfhgt(i,j-1).ne.0.0) then
+           if (ip(i,j-1).ne.0) then
                ssh_s = (srfhgt(i,j  ) - srfhgt(i,j-1))/(g*scvy(i,j  ))
                masks = 1.0
             endif
-            if (srfhgt(i,j+1).ne.0.0) then
+            if (ip(i,j+1).ne.0) then
                ssh_n = (srfhgt(i,j+1) - srfhgt(i,j  ))/(g*scvy(i,j+1))
                maskn = 1.0
             endif
-            if (ssh_n .ne.0.0 .and. ssh_s.ne.0.0) then
+            if (masks .eq. 1.0 .or. maskn .eq. 1.0) then
                dhdy=(ssh_n+ssh_s)/(maskn+masks) !! on the p-grid
             endif
              ! convert to eastward/northward grid
@@ -2142,7 +2137,9 @@
       real :: maskn,masks,maske,maskw
       real :: dp1,usur1,vsur1,psur1,dp2,usur2,vsur2,psur2,thksur, &
               utot,vtot
+#if defined (DMI_ATM_COUPLED)
       real :: inv_cplifq
+#endif
       real :: nstep2_cpl
       integer :: ld
       logical :: restart_cpl
@@ -2362,7 +2359,7 @@
 !
 ! --- set weights for quasi-hermite time interpolation for rivers.
       if     (priver) then
-#if defined (USE_NUOPC_CESMBETA)
+#if defined (USE_NUOPC_CESMBETA)  && defined (DMI_ATM_COUPLED)
          if (.not. (cpl_orivers .and. cpl_irivers)) then
 ! ---   monthly fields.
             x=1.+mod(dtime+dyear0,dyear)/dmonth
@@ -2720,33 +2717,33 @@
 !       write(6,'(I3,I3,G25.17)')iumin3,jumin3,u3min
         if (mnproc.eq.1) then
         write (lp,'(i9,a, &
-                    '' mean      SSH (mm):'',f8.2, &
-                    ''  ('',1pe8.1,'' to '',e8.1,'')'')') &
+                   &'' mean      SSH (mm):'',f8.2, &
+                   &''  ('',1pe8.1,'' to '',e8.1,'')'')') &
         nstep,c_ydh, &
         sum/(area*svref*onemm),smin/(svref*onemm),smax/(svref*onemm)
         write(nod,'(i9,a, &
-                    '' mean      SSH (mm):'',f8.2, &
-                    ''  ('',1pe8.1,'' to '',e8.1,'')'')') &
+                   &'' mean      SSH (mm):'',f8.2, &
+                   &''  ('',1pe8.1,'' to '',e8.1,'')'')') &
         nstep,c_ydh, &
         sum/(area*svref*onemm),smin/(svref*onemm),smax/(svref*onemm)
         if     (sshflg.ne.1) then
           write (lp,'(i9,a, &
-                      '' mean MontgPot (mm):'',f8.2)') &
+                     &'' mean MontgPot (mm):'',f8.2)') &
           nstep,c_ydh, &
           smt/(area*svref*onemm)
           call flush(lp)
           write(nod,'(i9,a, &
-                      '' mean MontgPot (mm):'',f8.2)') &
+                     &'' mean MontgPot (mm):'',f8.2)') &
           nstep,c_ydh, &
           smt/(area*svref*onemm)
         else
           write (lp,'(i9,a, &
-                      '' mean   St-SSH (mm):'',f8.2)') &
+                     &'' mean   St-SSH (mm):'',f8.2)') &
           nstep,c_ydh, &
           smt/(area*svref*onemm)
           call flush(lp)
           write(nod,'(i9,a, &
-                      '' mean   St-SSH (mm):'',f8.2)') &
+                     &'' mean   St-SSH (mm):'',f8.2)') &
           nstep,c_ydh, &
           smt/(area*svref*onemm)
         endif !sshflg
@@ -2820,16 +2817,16 @@
           if (mnproc.eq.1) then
 #if defined(STOKES)
           write (lp,'(i9,a, &
-                        '' region-wide mean SKE:'',f20.10)') &
+                       &'' region-wide mean SKE:'',f20.10)') &
               nstep,c_ydh, &
                 smx
 #endif
           write (lp,'(i9,a, &
-                        '' region-wide mean KE: '',f20.10)') &
+                       &'' region-wide mean KE: '',f20.10)') &
               nstep,c_ydh, &
                 sum
           write (lp,'(i9,a, &
-                        '' region-wide mean APE:'',f20.10)') &
+                       &'' region-wide mean APE:'',f20.10)') &
               nstep,c_ydh, &
                 sms*0.5*g*(rhoref+thbase)
           endif
@@ -2870,14 +2867,14 @@
           smt= (dsmt*1.00D9)/area  ! 1.e9*m**2/sec**3
           if (mnproc.eq.1) then
           write (lp, '(i9,a, &
-              '' mean BFL (m^2/s^3):'',f8.2, &
-                             '' hfl:'',f8.2)') &
+             &'' mean BFL (m^2/s^3):'',f8.2, &
+                            &'' hfl:'',f8.2)') &
             nstep,c_ydh, &
             sum,smt
           call flush(lp)
           write (nod,'(i9,a, &
-              '' mean BFL (m^2/s^3):'',f8.2, &
-                             '' hfl:'',f8.2)') &
+             &'' mean BFL (m^2/s^3):'',f8.2, &
+                            &'' hfl:'',f8.2)') &
             nstep,c_ydh, &
             sum,smt
           call flush(nod)
@@ -2903,16 +2900,16 @@
           smr= d3  /area
           if (mnproc.eq.1) then
           write (lp, '(i9,a, &
-              '' mean HFLUX (w/m^2):'',f8.2, &
-                             '' sst:'',f8.2, &
-                             ''  ml:'',f8.2)') &
+             &'' mean HFLUX (w/m^2):'',f8.2, &
+                            &'' sst:'',f8.2, &
+                            &''  ml:'',f8.2)') &
             nstep,c_ydh, &
             sum,smr,smt
           call flush(lp)
           write (nod,'(i9,a, &
-              '' mean HFLUX (w/m^2):'',f8.2, &
-                             '' sst:'',f8.2, &
-                             ''  ml:'',f8.2)') &
+             &'' mean HFLUX (w/m^2):'',f8.2, &
+                            &'' sst:'',f8.2, &
+                            &''  ml:'',f8.2)') &
             nstep,c_ydh, &
             sum,smr,smt
           call flush(nod)
@@ -2936,14 +2933,14 @@
           smr=-(dsum*svref*7.0D0*8.64D7)/area  ! SSS relax in mm/week
           if (mnproc.eq.1) then
           write (lp, '(i9,a, &
-              '' mean WFLUX (mm/wk):'',f8.2, &
-                             '' sss:'',f8.2)') &
+             &'' mean WFLUX (mm/wk):'',f8.2, &
+                            &'' sss:'',f8.2)') &
             nstep,c_ydh, &
             sms,smr
           call flush(lp)
           write (nod,'(i9,a, &
-              '' mean WFLUX (mm/wk):'',f8.2, &
-                             '' sss:'',f8.2)') &
+             &'' mean WFLUX (mm/wk):'',f8.2, &
+                            &'' sss:'',f8.2)') &
             nstep,c_ydh, &
             sms,smr
           call flush(nod)
@@ -2989,16 +2986,16 @@
           endif
           if (mnproc.eq.1) then
           write (lp,'(i9,a, &
-                    '' mean  ice thk. (m):'',f8.2, &
-                                 ''  temp:'',f7.3, &
-                                  '' pcen:'',f7.3)') &
+                   &'' mean  ice thk. (m):'',f8.2, &
+                                &''  temp:'',f7.3, &
+                                 &'' pcen:'',f7.3)') &
             nstep,c_ydh, &
             sum,smt,sms
           call flush(lp)
           write(nod,'(i9,a, &
-                    '' mean  ice thk. (m):'',f8.2, &
-                                 ''  temp:'',f7.3, &
-                                  '' pcen:'',f7.3)') &
+                   &'' mean  ice thk. (m):'',f8.2, &
+                                &''  temp:'',f7.3, &
+                                 &'' pcen:'',f7.3)') &
             nstep,c_ydh, &
             sum,smt,sms
           call flush(nod)
@@ -3042,16 +3039,16 @@
           endif
           if (mnproc.eq.1) then
           write (lp,'(i9,a, &
-                    '' mean SH I thk. (m):'',f8.2, &
-                                 ''  temp:'',f7.3, &
-                                  '' pcen:'',f7.3)') &
+                   &'' mean SH I thk. (m):'',f8.2, &
+                                &''  temp:'',f7.3, &
+                                 &'' pcen:'',f7.3)') &
             nstep,c_ydh, &
             sum,smt,sms
           call flush(lp)
           write(nod,'(i9,a, &
-                    '' mean SH I thk. (m):'',f8.2, &
-                                 ''  temp:'',f7.3, &
-                                  '' pcen:'',f7.3)') &
+                   &'' mean SH I thk. (m):'',f8.2, &
+                                &''  temp:'',f7.3, &
+                                 &'' pcen:'',f7.3)') &
             nstep,c_ydh, &
             sum,smt,sms
           call flush(nod)
@@ -3071,16 +3068,16 @@
           endif
           if (mnproc.eq.1) then
           write (lp,'(i9,a, &
-                    '' mean NH I thk. (m):'',f8.2, &
-                                 ''  temp:'',f7.3, &
-                                  '' pcen:'',f7.3)') &
+                   &'' mean NH I thk. (m):'',f8.2, &
+                                &''  temp:'',f7.3, &
+                                 &'' pcen:'',f7.3)') &
             nstep,c_ydh, &
             sum,smt,sms
           call flush(lp)
           write(nod,'(i9,a, &
-                    '' mean NH I thk. (m):'',f8.2, &
-                                 ''  temp:'',f7.3, &
-                                  '' pcen:'',f7.3)') &
+                   &'' mean NH I thk. (m):'',f8.2, &
+                                &''  temp:'',f7.3, &
+                                 &'' pcen:'',f7.3)') &
             nstep,c_ydh, &
             sum,smt,sms
           call flush(nod)
@@ -3112,16 +3109,16 @@
           sms=dsms/area * 100.0
           if (mnproc.eq.1) then
           write (lp,'(i9,a, &
-                    '' mean   covice pcen:'',f9.3, &
-                                  ''  S.H:'',f7.3, &
-                                  ''  N.H:'',f7.3)') &
+                   &'' mean   covice pcen:'',f9.3, &
+                                 &''  S.H:'',f7.3, &
+                                 &''  N.H:'',f7.3)') &
           nstep,c_ydh, &
           smt,sms,smt-sms
           call flush(lp)
           write(nod,'(i9,a, &
-                    '' mean   covice pcen:'',f9.3, &
-                                  ''  S.H:'',f7.3, &
-                                  ''  N.H:'',f7.3)') &
+                   &'' mean   covice pcen:'',f9.3, &
+                                 &''  S.H:'',f7.3, &
+                                 &''  N.H:'',f7.3)') &
           nstep,c_ydh, &
           smt,sms,smt-sms
           call flush(nod)
@@ -3156,16 +3153,16 @@
         endif
         if (mnproc.eq.1) then
         write (lp,'(i9,a, &
-                    '' mean mixl thk. (m):'',f8.2, &
-                                 ''  temp:'',f7.3, &
-                                  '' saln:'',f7.3)') &
+                   &'' mean mixl thk. (m):'',f8.2, &
+                                &''  temp:'',f7.3, &
+                                 &'' saln:'',f7.3)') &
             nstep,c_ydh, &
             sum,smt,sms
         call flush(lp)
         write(nod,'(i9,a, &
-                    '' mean mixl thk. (m):'',f8.2, &
-                                 ''  temp:'',f7.3, &
-                                  '' saln:'',f7.3)') &
+                   &'' mean mixl thk. (m):'',f8.2, &
+                                &''  temp:'',f7.3, &
+                                 &'' saln:'',f7.3)') &
             nstep,c_ydh, &
             sum,smt,sms
         call flush(nod)
@@ -3177,16 +3174,16 @@
         sms=dsms/area
         if (mnproc.eq.1) then
         write (lp,'(i9,a, &
-                  '' mean surf thk. (m):'',f8.2, &
-                               ''   sst:'',f7.3, &
-                                ''  sss:'',f7.3)') &
+                 &'' mean surf thk. (m):'',f8.2, &
+                              &''   sst:'',f7.3, &
+                               &''  sss:'',f7.3)') &
           nstep,c_ydh, &
           dp00*qonem,smt,sms  !dp00 is max, not mean, surf thk.
         call flush(lp)
         write(nod,'(i9,a, &
-                  '' mean surf thk. (m):'',f8.2, &
-                               ''   sst:'',f7.3, &
-                                ''  sss:'',f7.3)') &
+                 &'' mean surf thk. (m):'',f8.2, &
+                              &''   sst:'',f7.3, &
+                               &''  sss:'',f7.3)') &
           nstep,c_ydh, &
           dp00*qonem,smt,sms  !dp00 is max, not mean, surf thk.
         call flush(nod)
@@ -3247,31 +3244,31 @@
           if (mnproc.eq.1) then
           if     (relaxf) then
             write (lp,'(i9,a, &
-                      '' mean clim thk. (m):'',f8.2, &
-                                   ''   sst:'',f7.3, &
-                                    ''  sss:'',f7.3)') &
+                     &'' mean clim thk. (m):'',f8.2, &
+                                  &''   sst:'',f7.3, &
+                                   &''  sss:'',f7.3)') &
               nstep,c_ydh, &
               thkmin,smt,sms
             call flush(lp)
             write(nod,'(i9,a, &
-                      '' mean clim thk. (m):'',f8.2, &
-                                   ''   sst:'',f7.3, &
-                                    ''  sss:'',f7.3)') &
+                     &'' mean clim thk. (m):'',f8.2, &
+                                  &''   sst:'',f7.3, &
+                                   &''  sss:'',f7.3)') &
               nstep,c_ydh, &
               thkmin,smt,sms
             call flush(nod)
           else !.not.relaxf
             write (lp,'(i9,a, &
-                      '' mean clim thk. (m):'',f8.2, &
-                                   ''   sst:'',f7.3, &
-                                    '' surt:'',f7.3)') &
+                     &'' mean clim thk. (m):'',f8.2, &
+                                  &''   sst:'',f7.3, &
+                                   &'' surt:'',f7.3)') &
               nstep,c_ydh, &
               thkmin,smt,sms
             call flush(lp)
             write(nod,'(i9,a, &
-                      '' mean clim thk. (m):'',f8.2, &
-                                   ''   sst:'',f7.3, &
-                                    '' surt:'',f7.3)') &
+                     &'' mean clim thk. (m):'',f8.2, &
+                                  &''   sst:'',f7.3, &
+                                   &'' surt:'',f7.3)') &
               nstep,c_ydh, &
               thkmin,smt,sms
             call flush(nod)
@@ -3351,16 +3348,16 @@
           endif
           if (mnproc.eq.1) then
           write (lp,'(i9,a, &
-                      '' mean L '',i2,'' thk. (m):'',f8.2, &
-                                         ''  temp:'',f7.3, &
-                                          '' saln:'',f7.3)') &
+                     &'' mean L '',i2,'' thk. (m):'',f8.2, &
+                                        &''  temp:'',f7.3, &
+                                         &'' saln:'',f7.3)') &
               nstep,c_ydh, &
               k,sum,smt,sms
           call flush(lp)
           write(nod,'(i9,a, &
-                      '' mean L '',i2,'' thk. (m):'',f8.2, &
-                                         ''  temp:'',f7.3, &
-                                          '' saln:'',f7.3)') &
+                     &'' mean L '',i2,'' thk. (m):'',f8.2, &
+                                        &''  temp:'',f7.3, &
+                                         &'' saln:'',f7.3)') &
               nstep,c_ydh, &
               k,sum,smt,sms
           call flush(nod)
@@ -3377,55 +3374,55 @@
         if (mnproc.eq.1) then
 #if defined(STOKES)
         write (lp,'(i9,a, &
-                      '' region-wide mean Stokes K.E.:'',f20.10)') &
+                     &'' region-wide mean Stokes K.E.:'',f20.10)') &
             nstep,c_ydh, &
               smx
 #endif
         write (lp,'(i9,a, &
-                      '' region-wide mean Kin. Energy:'',f20.10)') &
+                     &'' region-wide mean Kin. Energy:'',f20.10)') &
             nstep,c_ydh, &
               sum
         write (lp,'(i9,a, &
-                      '' region-wide mean Temperature:'',f20.10)') &
+                     &'' region-wide mean Temperature:'',f20.10)') &
             nstep,c_ydh, &
               smt
         write (lp,'(i9,a, &
-                      '' region-wide mean Salinity:   '',f20.10)') &
+                     &'' region-wide mean Salinity:   '',f20.10)') &
             nstep,c_ydh, &
               sms
         write (lp,'(i9,a, &
-                      '' region-wide Salt Anomaly:    '',f20.10)') &
+                     &'' region-wide Salt Anomaly:    '',f20.10)') &
             nstep,c_ydh, &
               smsa
         write (lp,'(i9,a, &
-                      '' region-wide mean Density Dev:'',f20.10)') &
+                     &'' region-wide mean Density Dev:'',f20.10)') &
             nstep,c_ydh, &
               smr
         call flush(lp)
 #if defined(STOKES)
         write (nod,'(i9,a, &
-                      '' region-wide mean Stokes K.E.:'',f20.10)') &
+                     &'' region-wide mean Stokes K.E.:'',f20.10)') &
             nstep,c_ydh, &
               smx
 #endif
         write(nod,'(i9,a, &
-                      '' region-wide mean Kin. Energy:'',f20.10)') &
+                     &'' region-wide mean Kin. Energy:'',f20.10)') &
             nstep,c_ydh, &
               sum
         write(nod,'(i9,a, &
-                      '' region-wide mean Temperature:'',f20.10)') &
+                     &'' region-wide mean Temperature:'',f20.10)') &
             nstep,c_ydh, &
               smt
         write(nod,'(i9,a, &
-                      '' region-wide mean Salinity:   '',f20.10)') &
+                     &'' region-wide mean Salinity:   '',f20.10)') &
             nstep,c_ydh, &
               sms
         write(nod,'(i9,a, &
-                      '' region-wide Salt Anomaly:    '',f20.10)') &
+                     &'' region-wide Salt Anomaly:    '',f20.10)') &
             nstep,c_ydh, &
               smsa
         write(nod,'(i9,a, &
-                      '' region-wide mean Density Dev:'',f20.10)') &
+                     &'' region-wide mean Density Dev:'',f20.10)') &
             nstep,c_ydh, &
               smr
         call flush(nod)
@@ -3451,14 +3448,14 @@
           smt=dsumtr(ktr)/dsuma  !dsuma still good from K.E. loops
           if (mnproc.eq.1) then
           write (lp,'(i9,a, &
-                        '' region-wide mean tracer'',i3.2, &
-                        '':  '',f20.10)') &
+                       &'' region-wide mean tracer'',i3.2, &
+                       &'':  '',f20.10)') &
               nstep,c_ydh, &
                 ktr,smt
           call flush(lp)
           write(nod,'(i9,a, &
-                        '' region-wide mean tracer'',i3.2, &
-                        '':  '',f20.10)') &
+                       &'' region-wide mean tracer'',i3.2, &
+                       &'':  '',f20.10)') &
               nstep,c_ydh, &
                 ktr,smt
           call flush(nod)
@@ -3477,12 +3474,12 @@
             smt=(dsumtr(ktr)+dsumtr(ktr-1)+dsumtr(ktr-2))/dsuma
             if (mnproc.eq.1) then
             write (lp,'(i9,a, &
-                          '' region-wide mean N+P+Z:      '',f20.10)') &
+                         &'' region-wide mean N+P+Z:      '',f20.10)') &
                 nstep,c_ydh, &
                   smt
             call flush(lp)
             write(nod,'(i9,a, &
-                          '' region-wide mean N+P+Z:      '',f20.10)') &
+                         &'' region-wide mean N+P+Z:      '',f20.10)') &
                 nstep,c_ydh, &
                   smt
             call flush(nod)
@@ -3492,12 +3489,12 @@
                  dsumtr(ktr-2)+dsumtr(ktr-3))/dsuma
             if (mnproc.eq.1) then
             write (lp,'(i9,a, &
-                          '' region-wide mean N+P+Z+D:    '',f20.10)') &
+                         &'' region-wide mean N+P+Z+D:    '',f20.10)') &
                 nstep,c_ydh, &
                   smt
             call flush(lp)
             write(nod,'(i9,a, &
-                          '' region-wide mean N+P+Z+D:    '',f20.10)') &
+                         &'' region-wide mean N+P+Z+D:    '',f20.10)') &
                 nstep,c_ydh, &
                   smt
             call flush(nod)
@@ -3656,6 +3653,7 @@
 ! --- end of coupling sequence
       ! stepable end-of-run condition
       ! endtime present means that "end_of_run_cpl" needs to be set correctly
+#if defined (DMI_ATM_COUPLED)
       nstep2_cpl=nint(endtime*(86400.0d0/baclin))
 
       if(mnproc.eq.1) print *,"mod_hycom,nstep,nstep2,nstep2_cpl =", &
@@ -3671,6 +3669,9 @@
 !!Alex
 !! add mean export field
       inv_cplifq= 1./icefrq
+#else
+      end_of_run_cpl = .true.
+#endif
 !$OMP     PARALLEL DO PRIVATE(j,i)
 !$OMP&             SCHEDULE(STATIC,jblk)
       do j=1-nbdy,jj+nbdy
@@ -3715,29 +3716,29 @@
            maskn = 0.0
            masks = 0.0
            ! calculate the eastward slope
-           if (srfhgt(i-1,j).ne.0.0) then
+           if (ip(i-1,j).ne.0) then
              ssh_w = (srfhgt(i  ,j) - srfhgt(i-1,j))/(g*scux(i  ,j))
              maskw = 1.0
            endif
-           if (srfhgt(i+1,j).ne.0.0) then
+           if (ip(i+1,j).ne.0) then
              ssh_e = (srfhgt(i+1,j) - srfhgt(i  ,j))/(g*scux(i+1,j))
              maske = 1.0
            endif
 
-           if (ssh_e .ne.0.0 .or. ssh_w.ne.0.0) then
+           if ( maskw .eq.1.0 .or. maske .eq. 1.0 ) then
               dhdx=(ssh_e+ssh_w)/(maskw+maske) !! on the p-grid
            endif
 
            ! calculate the northward slope
-           if (srfhgt(i,j-1).ne.0.0) then
+           if (ip(i,j-1).ne.0) then
               ssh_s = (srfhgt(i,j  ) - srfhgt(i,j-1))/(g*scvy(i,j  ))
               masks = 1.0
            endif
-           if (srfhgt(i,j+1).ne.0.0) then
+           if (ip(i,j+1).ne.0) then
               ssh_n = (srfhgt(i,j+1) - srfhgt(i,j  ))/(g*scvy(i,j+1))
               maskn = 1.0
            endif
-           if (ssh_n .ne.0.0 .and. ssh_s.ne.0.0) then
+           if (masks .eq. 1.0 .or. maskn .eq. 1.0) then
               dhdy=(ssh_n+ssh_s)/(maskn+masks) !! on the p-grid
            endif
            ! convert to eastward/northward grid
@@ -3847,10 +3848,10 @@
         call forday(dtime,yrflag, iyear,jday,ihour)
         if (mnproc.eq.1) then
         write (lp,'(a,i9, 9x,a,i6.4, 9x,a,i5.3, 9x,a,i4.2)') &
-          ' time step',nstep, &
-          'y e a r',   iyear, &
-          'd a y',     jday, &
-          'h o u r',   ihour
+         &' time step',nstep, &
+         &'y e a r',   iyear, &
+         &'d a y',     jday, &
+         &'h o u r',   ihour
         call flush(lp)
         endif !1st tile
 !
@@ -3859,7 +3860,7 @@
 #if defined (USE_NUOPC_CESMBETA)
         if (restart_cpl) then
           write(flnmra,'(a,i4.4,a,i3.3,a,i2.2)') &
-                       'restart_', iyear,'-',jday,'-',ihour
+                      &'restart_', iyear,'-',jday,'-',ihour
           open(1,file=trim(pointer_filename),form='formatted', &
                  status='unknown')
           write(1,'(a)')trim(flnmra)
@@ -3941,7 +3942,7 @@
       if     (histry .or. hiprof .or. hitile .or. hisurf) then
         if (mnproc.eq.1) then
         write (lp,'(a,i9,a,f13.5,a)') &
-          ' step',nstep,' day',dtime,' -- archiving completed --'
+         &' step',nstep,' day',dtime,' -- archiving completed --'
         call flush(lp)
         endif !1st tile
       endif
