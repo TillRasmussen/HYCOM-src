@@ -1,8 +1,4 @@
-#if defined (USE_NUOPC_CESMBETA)
       subroutine blkdat(hycom_start_dtg)
-#else
-      subroutine blkdat
-#endif
       use mod_xc         ! HYCOM communication interface
       use mod_cb_arrays  ! HYCOM saved arrays
       use mod_incupd     ! HYCOM incremental update (for data assimilation)
@@ -17,9 +13,7 @@
       integer   k,kdmblk,mlflag,thflag,trcflg1
       integer   lngblk
       character sigfmt*26
-#if defined (USE_NUOPC_CESMBETA)
-      real,         intent(in):: hycom_start_dtg
-#endif
+      real, intent(in), optional :: hycom_start_dtg
 !
 # include "stmt_fns.h"
 !
@@ -2203,13 +2197,13 @@
 !
 ! --- initialize from climatology (update relaxf and relaxs)?
       if     (iniflg.eq.2) then
-#if defined (USE_NUOPC_CESMBETA)
-          day1 = hycom_start_dtg
-#else
-        open(unit=uoff+99,file=trim(flnminp)//'limits')  !on all nodes
-        read(uoff+99,*) day1
-        close(unit=uoff+99) !file='limits'
-#endif /* USE_NUOPC_CESMBETA */
+          if  (present(hycom_start_dtg)) then
+             day1 = hycom_start_dtg
+          else
+             open(unit=uoff+99,file=trim(flnminp)//'limits')  !on all nodes
+             read(uoff+99,*) day1
+             close(unit=uoff+99) !file='limits'
+          endif 
         if     (day1.le.0.0) then
           relaxf = .true.
           relaxs = .false.
