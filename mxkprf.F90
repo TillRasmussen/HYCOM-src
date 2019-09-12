@@ -3244,7 +3244,7 @@
 !diag endif !test
 !
 ! --- do rivers here because difs is also used for tracers.
-#if defined (USE_NUOPC_CESMBETA)
+#if defined (USE_NUOPC_CESMBETA)  && defined (DMI_ATM_COUPLED)
       if(cpl_orivers.and.cpl_irivers) then
          riv_input = imp_orivers(i,j,1)+imp_irivers(i,j,1)
       else

@@ -393,7 +393,7 @@
         enddo
       endif
 
-#if defined (USE_NUOPC_CESMBETA)
+#if defined (USE_NUOPC_CESMBETA)  && defined (DMI_ATM_COUPLED)
       if (restart_cpl) then
         call zagetc(cline,ios, uoff+11)
         if (cline(1:8).eq. 'tml     ') then
@@ -951,7 +951,7 @@
           endif !1st tile
         enddo !ktr
       endif !trcout
-#if defined (USE_NUOPC_CESMBETA)
+#if defined (USE_NUOPC_CESMBETA)  && defined (DMI_ATM_COUPLED)
       if (restart_cpl) then
 !!Alex averaged export fields
         call zaiowr3(tml,     1, ip,.false., xmin,xmax, iunta,.true.)

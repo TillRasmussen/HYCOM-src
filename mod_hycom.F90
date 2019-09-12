@@ -1089,15 +1089,13 @@
       character*80, intent(in), optional :: pointer_filename
       logical,      intent(in), optional :: restart_write
       logical       restart_cpl
+      integer :: mpi_comm_ocean,istat
 #endif
 #if defined(USE_NUOPC_CESMBETA)
       real :: ssh_n,ssh_s,ssh_e,ssh_w,dhdx,dhdy
       real :: maskn,masks,maske,maskw
       real :: dp1,usur1,vsur1,psur1,dp2,usur2,vsur2,psur2,thksur, &
               utot,vtot
-      integer :: mpi_comm_ocean,istat
-#elif defined (ESPC_COUPLE)
-      integer :: mpi_comm_ocean,istat
 #endif /* USE_NUOPC_CESMBETA:ESPC_COUPLE */
 !
 ! --- Initialize (before the 1st time step).
@@ -1137,12 +1135,15 @@
       call xcspmd(mpiCommunicator)
 #else
 ! --- initialize hycom message passing.
-      if present(mpiCommunicator) then
+      if (present(mpiCommunicator)) then
          call MPI_Comm_Dup(mpiCommunicator,mpi_comm_ocean,istat)
          call xcspmd(mpi_comm_ocean)
       else
 ! --- initialize SPMD processsing
-      call xcspmd
+         call xcspmd
+! avoid computer warnings not used
+          mpi_comm_ocean = 0
+          istat = 0 
       endif
 #endif
 ! --- initialize timer names.
@@ -1414,13 +1415,13 @@
       call forfundf
 !
 ! --- model is to be integrated from time step 'nstep1' to 'nstep2'
-      if (present(hycom_start_dtg) .and. (present(hycom_end_dtg))) then
+      if ((present(hycom_start_dtg)) .and. (present(hycom_end_dtg))) then
          day1 = hycom_start_dtg
          day2 = hycom_end_dtg
-      elseif (present(hycom_start_dtg) .or. (present(hycom_end_dtg)))
+      elseif ((present(hycom_start_dtg)) .or. (present(hycom_end_dtg))) then
         if (mnproc.eq.1) then
          write(lp,'(/ a /)') 'error in hycom - Both optional parameters &
-               &''Must be p'
+               &''Must be present if one is present'
          call flush(lp)
         endif !1st tile
         call xcstop('(hycom)')
@@ -1767,8 +1768,8 @@
             if (jerlv0.gt.0) then
 ! ---       calculate jerlov water type,
 ! ---       which governs the penetration depth of shortwave radiation.
-!$OMP     PARALLEL DO PRIVATE(j,i)
-!$OMP&             SCHEDULE(STATIC,jblk)
+!$OMP     PARALLEL DO PRIVATE(j,i) &
+!$OMP             SCHEDULE(STATIC,jblk)
               do j=1-nbdy,jj+nbdy
                 do i=1-nbdy,ii+nbdy
 ! ---           map shallow depths to high jerlov numbers
@@ -1780,8 +1781,8 @@
             else
 ! ---     jerlv0= 0 uses an input annual/monthly kpar field
 ! ---     jerlv0=-1 uses an input annual/monthly chl  field
-!$OMP     PARALLEL DO PRIVATE(j,i)
-!$OMP&             SCHEDULE(STATIC,jblk)
+!$OMP     PARALLEL DO PRIVATE(j,i) &
+!$OMP             SCHEDULE(STATIC,jblk)
               do j=1-nbdy,jj+nbdy
                 do i=1-nbdy,ii+nbdy
                   jerlov(i,j)=jerlv0
@@ -1966,10 +1967,10 @@
       pcp_fact = 1.0 ! always 1.: no precipiation adjustment
 
 !!Alex  calculation of seas surface slope for export to CICE (NUOPC)
-!$OMP     PARALLEL DO PRIVATE(j,i)
-!$OMP&             SCHEDULE(STATIC,jblk)
-      do j=1-nbdy,jj+nbdy
-        do i=1-nbdy,ii+nbdy
+!$OMP     PARALLEL DO PRIVATE(j,i) &
+!$OMP             SCHEDULE(STATIC,jblk)
+      do j=1,jj
+        do i=1,ii
           if (SEA_P) then
             ssh_e = 0.0
             ssh_w = 0.0
@@ -2015,10 +2016,10 @@
       enddo
 !$OMP END PARALLEL DO
 !!Alex calculation of u and v surf for export to CICE
-!$OMP     PARALLEL DO PRIVATE(j,i)
-!$OMP&             SCHEDULE(STATIC,jblk)
-      do j=1-nbdy,jj+nbdy
-        do i=1-nbdy,ii+nbdy
+!$OMP     PARALLEL DO PRIVATE(j,i) &
+!$OMP             SCHEDULE(STATIC,jblk)
+      do j=1,jj
+        do i=1,ii
           if (SEA_P) then
 ! ---       average currents over top thkcdw meters
             thksur = onem*min( thkcdw, depths(i,j) )
@@ -2060,8 +2061,8 @@
 !$OMP END PARALLEL DO
       if (linit) then
 !!Alex initialization of time averaged export fields
-!$OMP     PARALLEL DO PRIVATE(j,i)
-!$OMP&             SCHEDULE(STATIC,jblk)
+!$OMP     PARALLEL DO PRIVATE(j,i) &
+!$OMP             SCHEDULE(STATIC,jblk)
           do j=1-nbdy,jj+nbdy
             do i=1-nbdy,ii+nbdy
               if (SEA_P) then
@@ -2073,8 +2074,8 @@
           enddo
 !$OMP END PARALLEL DO
       else
-!$OMP     PARALLEL DO PRIVATE(j,i)
-!$OMP&             SCHEDULE(STATIC,jblk)
+!$OMP     PARALLEL DO PRIVATE(j,i) &
+!$OMP             SCHEDULE(STATIC,jblk)
           do j=1-nbdy,jj+nbdy
             do i=1-nbdy,ii+nbdy
               if (SEA_P) then
@@ -3672,8 +3673,8 @@
 #else
       end_of_run_cpl = .true.
 #endif
-!$OMP     PARALLEL DO PRIVATE(j,i)
-!$OMP&             SCHEDULE(STATIC,jblk)
+!$OMP     PARALLEL DO PRIVATE(j,i) &
+!$OMP             SCHEDULE(STATIC,jblk)
       do j=1-nbdy,jj+nbdy
         do i=1-nbdy,ii+nbdy
           if (SEA_P) then
@@ -3700,10 +3701,10 @@
 
         sshm(:,:)=srfhgt(:,:)
 !Alex  calculation of seas surface slope for export to CICE (NUOPC)
-!$OMP     PARALLEL DO PRIVATE(j,i)
-!$OMP&             SCHEDULE(STATIC,jblk)
-        do j=1-nbdy,jj+nbdy
-          do i=1-nbdy,ii+nbdy
+!$OMP     PARALLEL DO PRIVATE(j,i) &
+!$OMP             SCHEDULE(STATIC,jblk)
+        do j=1,jj
+          do i=1,ii
           if (SEA_P) then
            ssh_e = 0.0
            ssh_w = 0.0
@@ -3749,8 +3750,8 @@
         enddo
 !$OMP END PARALLEL DO
 !!Alex calculation of u and v surf for export to CICE
-!$OMP     PARALLEL DO PRIVATE(j,i)
-!$OMP&             SCHEDULE(STATIC,jblk)
+!$OMP     PARALLEL DO PRIVATE(j,i) &
+!$OMP             SCHEDULE(STATIC,jblk)
         do j=1-nbdy,jj+nbdy
           do i=1-nbdy,ii+nbdy
            if (SEA_P) then
@@ -3768,8 +3769,8 @@
 !$OMP END PARALLEL DO
 
 !!Alex calculation of tmxl,smxl
-!$OMP     PARALLEL DO PRIVATE(j,i)
-!$OMP&             SCHEDULE(STATIC,jblk)
+!$OMP     PARALLEL DO PRIVATE(j,i) &
+!$OMP             SCHEDULE(STATIC,jblk)
         do j=1-nbdy,jj+nbdy
           do i=1-nbdy,ii+nbdy
            if (SEA_P) then
@@ -3798,8 +3799,8 @@
 
 ! --- reset average fields
         ntavg = 0
-!$OMP     PARALLEL DO PRIVATE(j,i)
-!$OMP&             SCHEDULE(STATIC,jblk)
+!$OMP     PARALLEL DO PRIVATE(j,i) &
+!$OMP             SCHEDULE(STATIC,jblk)
         do j=1-nbdy,jj+nbdy
           do i=1-nbdy,ii+nbdy
             if (SEA_P) then

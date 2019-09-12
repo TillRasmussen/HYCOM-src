@@ -37,7 +37,7 @@
           do i=1,ii
             if (SEA_P) then
               if     (ishlf(i,j).eq.1) then  !standard ocean point
-#if defined (USE_NUOPC_CESMBETA)
+#if defined (USE_NUOPC_CESMBETA) && defined (DMI_ATM_COUPLED)
                 if ( cpl_swflx  .and. cpl_lwmdnflx .and. cpl_lwmupflx &
                                 .and. cpl_precip    ) then
 
@@ -87,7 +87,7 @@
 ! ---     allow for sea ice
           do i=1,ii
             if (SEA_P) then
-#if defined (USE_NUOPC_CESMBETA)
+#if defined (USE_NUOPC_CESMBETA) && defined (DMI_ATM_COUPLED)
                 if ( cpl_swflx  .and. cpl_lwmdnflx .and. cpl_lwmupflx &
                                 .and. cpl_precip    ) then
 
@@ -594,7 +594,7 @@
           if     (lwflag.eq.2 .or. sstflg.gt.2   .or. &
                   icmflg.eq.2 .or. ticegr.eq.0.0     ) then
 ! ---       use seatmp, since it is the best available SST
-#if defined (USE_NUOPC_CESMBETA)
+#if defined (USE_NUOPC_CESMBETA) && defined (DMI_ATM_COUPLED)
             if(cpl_seatmp) then
                temp(i,j,k,n)=temp(i,j,k,n)+delt1*rmu(i,j)* &
               (( imp_seatmp(i,j,1)*cpl_w2 +imp_seatmp(i,j,2)*cpl_w3))/ &
@@ -798,7 +798,7 @@
 !diag       endif !1st tile
       endif
 !
-#if defined (USE_NUOPC_CESMBETA)
+#if defined (USE_NUOPC_CESMBETA) && defined (DMI_ATM_COUPLED)
 !jc   weights for the coupled forcing
       if(cpl_implicit) then
         if(nstep2_cpl.eq.0 .or. (nstep1_cpl.eq.nstep2_cpl)) then
@@ -880,7 +880,7 @@
           if     (d1.gt.-d3) then
 ! ---       scale up the negative values
             q = min(-d1/d3, 5.0 )  ! >1
-!$OMP       PARALLEL DO PRIVATE(j,k,l,i, q) &
+!$OMP       PARALLEL DO PRIVATE(j,k,l,i) &
 !$OMP                SCHEDULE(STATIC,jblk)
             do j=1,jj
               do i=1,ii
@@ -899,7 +899,7 @@
           else !d1.lt.-d3
 ! ---       scale up the positive values
             q = min(-d3/d1, 5.0 )  ! >1
-!$OMP       PARALLEL DO PRIVATE(j,k,l,i, q) &
+!$OMP       PARALLEL DO PRIVATE(j,k,l,i) &
 !$OMP                SCHEDULE(STATIC,jblk)
             do j=1,jj
               do i=1,ii
@@ -998,8 +998,10 @@
             secpyr=360.00d0*86400.0d0
           elseif (yrflag.lt.3) then
             secpyr=366.00d0*86400.0d0
-          elseif (yrflag.ge.3) then
+          elseif (yrflag.eq.3) then
             secpyr=365.25d0*86400.0d0
+          elseif (yrflag.eq.4) then
+            secpyr=365.00d0*86400.0d0
           endif
           if     (mnproc.eq.1) then
           write (lp,'(i9,a,2f10.3)')  &
@@ -1177,7 +1179,9 @@
       real, parameter :: cpcore=1000.5      !specific heat of air (j/kg/deg)
 !
       real satvpr,qsatur6,qsatur,qsatur5,t6,p6,f6,qra
-# include "stmt_fns.h"  !declares t
+# include "stmt_fns.h"
+!  !t declared within "stmt_fns.h"
+
 !
 ! --- saturation vapor pressure (Pa),
 ! --- from a polynominal approximation (lowe, j.appl.met., 16, 100-103, 1976)
@@ -1215,7 +1219,7 @@
 ! ---   wind = wind, or wind-ocean, speed (m/s)
         if     (flxflg.eq.6) then
           wind=wndocn(i,j)  !magnitude of wind minus ocean current
-#if defined (USE_NUOPC_CESMBETA)
+#if defined (USE_NUOPC_CESMBETA) && defined (DMI_ATM_COUPLED)
         elseif(cpl_wndspd) then
           wind=imp_wndspd(i,j,1)*cpl_w2+imp_wndspd(i,j,2)*cpl_w3
 #endif  /* USE_NUOPC_CESMBETA */
@@ -1228,7 +1232,7 @@
 ! ---   swfl = shortwave radiative thermal flux (W/m^2) +ve into ocean/ice
 ! ---          Qsw includes the atmos. model's surface albedo,
 ! ---          i.e. it already allows for sea-ice&snow where it is observed.
-#if defined (USE_NUOPC_CESMBETA)
+#if defined (USE_NUOPC_CESMBETA) && defined (DMI_ATM_COUPLED)
         if(cpl_swflx) then
           swfl=imp_swflx (i,j,1)*cpl_w2+imp_swflx (i,j,2)*cpl_w3
         elseif (natm.eq.2) then
@@ -1257,7 +1261,7 @@
                   (1.0-xhr)*     xlat *diurnl(ihr,  ilat+1) + &
                        xhr *(1.0-xlat)*diurnl(ihr+1,ilat  ) + &
                        xhr *     xlat *diurnl(ihr+1,ilat+1)
-#if defined (USE_NUOPC_CESMBETA)
+#if defined (USE_NUOPC_CESMBETA) && defined (DMI_ATM_COUPLED)
           if(cpl_swflx) then
             swflc = (swscl-1.0)* &
                     (imp_swflx (i,j,1)*cpl_w2+imp_swflx (i,j,2)*cpl_w3)
@@ -1286,7 +1290,7 @@
         endif !dswflg
 ! ---   radfl= net       radiative thermal flux (W/m^2) +ve into ocean/ice
 ! ---        = Qsw+Qlw across the atmosphere to ocean or sea-ice interface
-#if defined (USE_NUOPC_CESMBETA)
+#if defined (USE_NUOPC_CESMBETA) && defined (DMI_ATM_COUPLED)
         if(cpl_swflx .and. cpl_lwmdnflx .and. cpl_lwmupflx) then
            radfl= imp_swflx (i,j,1)*cpl_w2+imp_swflx (i,j,2)*cpl_w3 &
                  +imp_lwdflx(i,j,1)*cpl_w2+imp_lwdflx(i,j,2)*cpl_w3 &
@@ -1303,7 +1307,7 @@
         endif !natm
         if     (lwflag.eq.-1) then
 ! ---     input radflx is Qlwdn, convert to Qlw + Qsw
-#if defined (USE_NUOPC_CESMBETA)
+#if defined (USE_NUOPC_CESMBETA) && defined (DMI_ATM_COUPLED)
           if(cpl_swflx .and. cpl_lwmdnflx .and. cpl_lwmupflx ) then
              radfl= imp_swflx (i,j,1)*cpl_w2+imp_swflx (i,j,2)*cpl_w3 &
                    +imp_lwdflx(i,j,1)*cpl_w2+imp_lwdflx(i,j,2)*cpl_w3 &
@@ -1325,7 +1329,7 @@
                    ( twall(i,j,1,lc0)*wc0+twall(i,j,1,lc1)*wc1 &
                     +twall(i,j,1,lc2)*wc2+twall(i,j,1,lc3)*wc3)
           else !w.r.t. atmospheric model's sst
-#if defined (USE_NUOPC_CESMBETA)
+#if defined (USE_NUOPC_CESMBETA) && defined (DMI_ATM_COUPLED)
             if(cpl_surtmp) then
                   tdif = tsur - (imp_surtmp(i,j,1)*cpl_w2 &
                                 +imp_surtmp(i,j,2)*cpl_w3)
@@ -1360,7 +1364,7 @@
         if     (pcipf) then
 ! ---     prcp = precipitation (m/sec; positive into ocean)
 ! ---     note that if empflg==3, this is actually P-E
-#if defined (USE_NUOPC_CESMBETA)
+#if defined (USE_NUOPC_CESMBETA) && defined (DMI_ATM_COUPLED)
           if(cpl_precip) then
             prcp=imp_precip(i,j,1)*cpl_w2+imp_precip(i,j,2)*cpl_w3
           elseif (natm.eq.2) then
@@ -1374,7 +1378,7 @@
           endif !natm
         endif
         if     (empflg.lt.0) then  !observed (or NWP) SST
-#if defined (USE_NUOPC_CESMBETA)
+#if defined (USE_NUOPC_CESMBETA) && defined (DMI_ATM_COUPLED)
           if (cpl_seatmp) then
             esst = imp_seatmp(i,j,1)*cpl_w2+imp_seatmp(i,j,2)*cpl_w3
           elseif (natm.eq.2) then
@@ -1388,7 +1392,7 @@
           endif !natm
         endif
         if     (flxflg.ne.3) then
-#if defined (USE_NUOPC_CESMBETA)
+#if defined (USE_NUOPC_CESMBETA) && defined (DMI_ATM_COUPLED)
           if(cpl_airtmp .and. cpl_vapmix) then
              airt=imp_airtmp(i,j,1)*cpl_w2+imp_airtmp(i,j,2)*cpl_w3
              vpmx=imp_vapmix(i,j,1)*cpl_w2+imp_vapmix(i,j,2)*cpl_w3
@@ -1423,7 +1427,7 @@
         endif
 ! ---   ustar = U* (sqrt(N.m/kg))                 
         if     (ustflg.eq.3) then !ustar from input
-#if defined (USE_NUOPC_CESMBETA)
+#if defined (USE_NUOPC_CESMBETA) && defined (DMI_ATM_COUPLED)
           if(cpl_ustara) then
             ustar(i,j)=imp_ustara(i,j,1)*cpl_w2+imp_ustara(i,j,2)*cpl_w3
           elseif (natm.eq.2) then
@@ -1476,7 +1480,7 @@
           evape = ctl*airdns*evaplh*wind* &
                   max(0.,0.97*qsatur(esst)-vpmx)
         endif
-#if defined (USE_NUOPC_CESMBETA)
+#if defined (USE_NUOPC_CESMBETA) && defined (DMI_ATM_COUPLED)
 ! ---   Latent Heat flux (W/m2)
         if(cpl_latflx) then
             evap=imp_latflx(i,j,1)*cpl_w2+imp_latflx(i,j,2)*cpl_w3
@@ -1523,7 +1527,7 @@
           evape = slat*clh*wind*(0.97*qsatur(esst)-vpmx)
         endif
 
-#if defined (USE_NUOPC_CESMBETA)
+#if defined (USE_NUOPC_CESMBETA) && defined (DMI_ATM_COUPLED)
 ! ---   Latent Heat flux (W/m2)
         if(cpl_latflx) then
            evap=imp_latflx(i,j,1)*cpl_w2+imp_latflx(i,j,2)*cpl_w3
@@ -1630,7 +1634,7 @@
         if     (empflg.lt.0) then
           evape = slat*clh*wind*(0.97*qsatur(esst)-vpmx)
         endif
-#if defined (USE_NUOPC_CESMBETA)
+#if defined (USE_NUOPC_CESMBETA) && defined (DMI_ATM_COUPLED)
 ! ---   Latent Heat flux (W/m2)
         if(cpl_latflx) then
            evap=imp_latflx(i,j,1)*cpl_w2+imp_latflx(i,j,2)*cpl_w3
@@ -1741,7 +1745,7 @@
         if     (empflg.lt.0) then
           evape = slat*clh*wind*(qsatur6(esst,pair,sssf)-vpmx)
         endif
-#if defined (USE_NUOPC_CESMBETA)
+#if defined (USE_NUOPC_CESMBETA) && defined (DMI_ATM_COUPLED)
 ! ---   Latent Heat flux (W/m2)
         if(cpl_latflx) then
            evap=imp_latflx(i,j,1)*cpl_w2+imp_latflx(i,j,2)*cpl_w3
@@ -1850,7 +1854,7 @@
         if     (empflg.lt.0) then
           evape = slat*ce10*wind*(qsatur5(esst,qrair)-vpmx)
         endif
-#if defined (USE_NUOPC_CESMBETA)
+#if defined (USE_NUOPC_CESMBETA) && defined (DMI_ATM_COUPLED)
         if(cpl_latflx) then
           evap=imp_latflx(i,j,1)*cpl_w2+imp_latflx(i,j,2)*cpl_w3
         else
@@ -1862,7 +1866,7 @@
 
 ! --- Sensible Heat flux
         ssen   = cpcore*rair
-#if defined (USE_NUOPC_CESMBETA)
+#if defined (USE_NUOPC_CESMBETA) && defined (DMI_ATM_COUPLED)
         if(cpl_sensflx) then
           snsibl=imp_sensflx(i,j,1)*cpl_w2+imp_sensflx(i,j,2)*cpl_w3
         else
@@ -1906,7 +1910,7 @@
                    temp(i,j,1,n)
           endif !natm
         else  !synoptic sst
-#if defined (USE_NUOPC_CESMBETA)
+#if defined (USE_NUOPC_CESMBETA) && defined (DMI_ATM_COUPLED)
           if(cpl_seatmp) then
             sstdif = ( imp_seatmp(i,j,1)*cpl_w2 &
                       +imp_seatmp(i,j,2)*cpl_w3) - temp(i,j,1,n)
@@ -1943,7 +1947,7 @@
       wtrflx(i,j)=-emnp*rhoref
 ! --- allow for rivers as a precipitation bogas (m/s kg/m**3)
       if     (priver) then
-#if defined (USE_NUOPC_CESMBETA)
+#if defined (USE_NUOPC_CESMBETA) && defined (DMI_ATM_COUPLED)
         if(cpl_orivers.and.cpl_irivers) then
             rivflx(i,j) = ((imp_orivers(i,j,1)+imp_irivers(i,j,1))*cpl_w2 &
                         +  (imp_orivers(i,j,2)+imp_irivers(i,j,2))*cpl_w3) &

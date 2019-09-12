@@ -368,7 +368,7 @@
               endif !usur,vsur
 !
               if     (wndflg.eq.2 .or. wndflg.eq.3) then ! tau on p grid
-#if defined (USE_NUOPC_CESMBETA)
+#if defined (USE_NUOPC_CESMBETA) && defined (DMI_ATM_COUPLED)
                 if (cpl_taux) then
                   surtx(i,j) = imp_taux(i,j,1)*cpl_w2 &
                              + imp_taux(i,j,2)*cpl_w3
@@ -400,7 +400,7 @@
                 endif !natm
 #endif /* USE_NUOPC_CESMBETA */
               elseif (wndflg.eq.1) then ! tau on u&v grids - NOT RECOMMEDED
-#if defined (USE_NUOPC_CESMBETA)
+#if defined (USE_NUOPC_CESMBETA) && defined (DMI_ATM_COUPLED)
                  if     (mnproc.eq.1) then
                     write(lp,*)
                     write(lp,*) 'error in momtum - wndflg should be '
@@ -428,7 +428,7 @@
               else !wndflg.eq.4,5,6
 ! ---           calculate stress from 10m winds using cd_coare or cd_core2
 ! ---           for cd_core2, vpmx (vapmix) is specific humidity
-#if defined (USE_NUOPC_CESMBETA)
+#if defined (USE_NUOPC_CESMBETA) && defined (DMI_ATM_COUPLED)
                  if     (mnproc.eq.1) then
                     write(lp,*)
                     write(lp,*) 'error in momtum - wndflg should be '
@@ -511,7 +511,8 @@
                 surty(i,j) = 0.0
               elseif (iceflg.eq.2 .and. si_c(i,j).gt.0.0) then
 ! ---           allow for ice-ocean stress
-#if defined (USE_NUOPC_CESMBETA)
+#if defined (USE_NUOPC_CESMBETA)  
+!&& defined (DMI_ATM_COUPLED)
 ! ---           ice-ocean stress already in surtx and surty
 #else
                 uimo = si_u(i,j) - usur
