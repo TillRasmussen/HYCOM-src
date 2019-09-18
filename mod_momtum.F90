@@ -30,10 +30,12 @@
 #endif
         stress,stresx,stresy,dpmx,thkbop, &
         defor1, defor2, & ! deformation components
-        uflux1,vflux1   ! mass fluxes
+        uflux1,vflux1,  &  ! mass fluxes
+        potvor          ! potential vorticity 
+
       contains
 
-      subroutine momtum_init
+      subroutine momtum_init()
 ! Initialization of arrays for momentum equation
       implicit none
 #if defined(RELO)
@@ -42,14 +44,15 @@
               defor2(1-nbdy:idm+nbdy,1-nbdy:jdm+nbdy), &
               uflux1(1-nbdy:idm+nbdy,1-nbdy:jdm+nbdy), &
               vflux1(1-nbdy:idm+nbdy,1-nbdy:jdm+nbdy), &
+              potvor(1-nbdy:idm+nbdy,1-nbdy:jdm+nbdy), &
               stress(1-nbdy:idm+nbdy,1-nbdy:jdm+nbdy), &
               stresx(1-nbdy:idm+nbdy,1-nbdy:jdm+nbdy), &
               stresy(1-nbdy:idm+nbdy,1-nbdy:jdm+nbdy), &
               dpmx(1-nbdy:idm+nbdy,1-nbdy:jdm+nbdy), &
               thkbop(1-nbdy:idm+nbdy,1-nbdy:jdm+nbdy) )
-        call mem_stat_add( 9*(idm+2*nbdy)*(jdm+2*nbdy) )
+        call mem_stat_add( 10*(idm+2*nbdy)*(jdm+2*nbdy) )
 #endif
-        stress = r_init
+        stress = 0. !r_init
         stresx = r_init
         stresy = r_init
         dpmx = r_init
@@ -59,6 +62,7 @@
         defor2 = 0.
         uflux1 = 0.
         vflux1 = 0.
+        potvor = 0.
 
       end  subroutine momtum_init
 
@@ -2141,6 +2145,7 @@
 ! ---     note that hfharm is 0.5*harmonic mean
 !
           do i=max(1-margin,ifu(j,l)-1),min(ii+margin,ilu(j,l))
+          
             uflux1(i,j)= &
               ((vis2u(i,j)+vis2u(i+1,j))*(utotn(i,j)-utotn(i+1,j))+ &
                (vis4u(i,j)+vis4u(i+1,j))*(dl2u( i,j)-dl2u( i+1,j)) ) &
@@ -2538,10 +2543,6 @@
                          *hfharm(max(dpv(i,j  ,k,m),onemm), &
                                  max(dpv(i,j+1,k,m),onemm)) &
                          *scp2(i,j)*2./(scvy(i,j)+scvy(i,j+1))
-            write(mnproc+200,*) vis2v(i,j), vis2v(i,j+1), vtotn(i,j), &
-                 vtotn(i,j+1), vis4v(i,j), vis4v(i,j+1), dl2v( i,j), &
-                 dl2v( i,j+1), hfharm(max(dpv(i,j  ,k,m),onemm), &
-                 max(dpv(i,j+1,k,m),onemm))
             endif
           endif !ip
         enddo !i
@@ -2772,13 +2773,6 @@
       endif !tidflg
 !
 !diag       util4(i,j) = v(i,j,k,n)
-            write(100+mnproc,*) vtotn(i,j), delt1, scvyi(i,j), &
-            grady(i,j), vtotm(i,  j+1), vtotm(i,  j-1)**2,    &
-            utotm(i,  j  ), utotm(i+1,j  ), utotm(i+1,j-1),    &
-            uflux(i,  j  ), uflux(i+1,j  ), uflux(i,  j-1),   &
-            uflux(i+1,j-1), potvor(i,j), potvor(i+1,j), vbrhs(i,j), &
-            stress(i,j), vflux1(i,j), vflux1(i,j-1), vflux3(i,j), &
-            vflux2(i,j  ), qdpv, scv2(i,j)
             v(i,j,k,n) = vtotn(i,j) + &
               delt1*(-scvyi(i,j)*(grady(i,j) &
                                   +0.25*(vtotm(i,  j+1)**2- &
@@ -2817,13 +2811,15 @@
           endif !iv
         enddo !i
       enddo !j
-      stop
 !
 ! --- dissipation per m^2 on p-grid
 !
       do j=1,jj
         do i=1,ii
           if (SEA_P) then
+            write(600+mnproc,*) dispqd_mn(i,j), dpo(i,j,k,m),&
+            vtotn(i,j+1), stress(i,j+1), vtotn(i,j), &
+            stress(i,j) 
             if     (tidflg.gt.0 .and. drgscl.ne.0.0 &
                                 .and. thkdrg.gt.0.0) then
               displd_mn(i,j) = displd_mn(i,j) +  &
