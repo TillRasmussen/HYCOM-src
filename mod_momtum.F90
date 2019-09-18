@@ -21,16 +21,46 @@
 ! --- module for momtum and related routines
 !
       private !! default is private
-      public  :: momtum_hs, momtum, momtum4
+      public  :: momtum_hs, momtum, momtum4, momtum_init
 !
 #if defined(RELO)
       real, save, allocatable, dimension(:,:) :: &
 #else
       real, save, dimension(1-nbdy:idm+nbdy,1-nbdy:jdm+nbdy) :: &
 #endif
-        stress,stresx,stresy,dpmx,thkbop
-
+        stress,stresx,stresy,dpmx,thkbop, &
+        defor1, defor2, & ! deformation components
+        uflux1,vflux1   ! mass fluxes
       contains
+
+      subroutine momtum_init
+! Initialization of arrays for momentum equation
+      implicit none
+#if defined(RELO)
+      allocate( &
+              defor1(1-nbdy:idm+nbdy,1-nbdy:jdm+nbdy), &
+              defor2(1-nbdy:idm+nbdy,1-nbdy:jdm+nbdy), &
+              uflux1(1-nbdy:idm+nbdy,1-nbdy:jdm+nbdy), &
+              vflux1(1-nbdy:idm+nbdy,1-nbdy:jdm+nbdy), &
+              stress(1-nbdy:idm+nbdy,1-nbdy:jdm+nbdy), &
+              stresx(1-nbdy:idm+nbdy,1-nbdy:jdm+nbdy), &
+              stresy(1-nbdy:idm+nbdy,1-nbdy:jdm+nbdy), &
+              dpmx(1-nbdy:idm+nbdy,1-nbdy:jdm+nbdy), &
+              thkbop(1-nbdy:idm+nbdy,1-nbdy:jdm+nbdy) )
+        call mem_stat_add( 9*(idm+2*nbdy)*(jdm+2*nbdy) )
+#endif
+        stress = r_init
+        stresx = r_init
+        stresy = r_init
+        dpmx = r_init
+        thkbop = r_init
+! All of these should be zero on land.
+        defor1 = 0. 
+        defor2 = 0.
+        uflux1 = 0.
+        vflux1 = 0.
+
+      end  subroutine momtum_init
 
       subroutine momtum_hs(m,n)
       use mod_xc         ! HYCOM communication interface
@@ -71,23 +101,9 @@
 !     real*8    wtime1(10),wtime2(20,kdm),wtimes
 !
 # include "stmt_fns.h"
+# include "internal_kappaf.h"
+
 !
-#if defined(RELO)
-      if     (.not.allocated(stress)) then
-        allocate( &
-                stress(1-nbdy:idm+nbdy,1-nbdy:jdm+nbdy), &
-                stresx(1-nbdy:idm+nbdy,1-nbdy:jdm+nbdy), &
-                stresy(1-nbdy:idm+nbdy,1-nbdy:jdm+nbdy), &
-                  dpmx(1-nbdy:idm+nbdy,1-nbdy:jdm+nbdy), &
-                thkbop(1-nbdy:idm+nbdy,1-nbdy:jdm+nbdy) )
-        call mem_stat_add( 5*(idm+2*nbdy)*(jdm+2*nbdy) )
-                stress = r_init
-                stresx = r_init
-                stresy = r_init
-                  dpmx = r_init
-                thkbop = r_init
-      endif
-#endif
 !
       mbdy = 6
 !
@@ -533,12 +549,6 @@
         call xctilr(surty,1,1, 6,6, halo_pv)
       endif !windf
 !
-      return
-!
-      contains
-
-      include 'internal_kappaf.h'
-
       end subroutine momtum_hs
 !
       real function cd_coare(wind,vpmx,airt,sst)
@@ -2523,6 +2533,10 @@
                          *hfharm(max(dpv(i,j  ,k,m),onemm), &
                                  max(dpv(i,j+1,k,m),onemm)) &
                          *scp2(i,j)*2./(scvy(i,j)+scvy(i,j+1))
+            write(mnproc+200,*) vis2v(i,j), vis2v(i,j+1), vtotn(i,j), &
+                 vtotn(i,j+1), vis4v(i,j), vis4v(i,j+1), dl2v( i,j), &
+                 dl2v( i,j+1), hfharm(max(dpv(i,j  ,k,m),onemm), &
+                 max(dpv(i,j+1,k,m),onemm))
             endif
           endif !ip
         enddo !i
@@ -2753,6 +2767,13 @@
       endif !tidflg
 !
 !diag       util4(i,j) = v(i,j,k,n)
+            write(100+mnproc,*) vtotn(i,j), delt1, scvyi(i,j), &
+            grady(i,j), vtotm(i,  j+1), vtotm(i,  j-1)**2,    &
+            utotm(i,  j  ), utotm(i+1,j  ), utotm(i+1,j-1),    &
+            uflux(i,  j  ), uflux(i+1,j  ), uflux(i,  j-1),   &
+            uflux(i+1,j-1), potvor(i,j), potvor(i+1,j), vbrhs(i,j), &
+            stress(i,j), vflux1(i,j), vflux1(i,j-1), vflux3(i,j), &
+            vflux2(i,j  ), qdpv, scv2(i,j)
             v(i,j,k,n) = vtotn(i,j) + &
               delt1*(-scvyi(i,j)*(grady(i,j) &
                                   +0.25*(vtotm(i,  j+1)**2- &
@@ -2791,6 +2812,7 @@
           endif !iv
         enddo !i
       enddo !j
+      stop
 !
 ! --- dissipation per m^2 on p-grid
 !
@@ -3084,7 +3106,7 @@
       logical, parameter :: lpipe_momtum=.false.  !usually .false.
 !
       logical, parameter :: momtum4_orig=.false.  !usually .false.
-      logical, parameter :: momtum4_cfl =.true.   !usually .false.
+      logical, parameter :: momtum4_cfl =.false.   !usually .false.
 !
 #if defined(RELO)
       real, save, allocatable, dimension(:,:) :: &
@@ -3239,8 +3261,6 @@
             pu(i,j,1)   = 0.0
             pv(i,j,1)   = 0.0
 !
-            defor1(i,j) = 0.0
-            defor2(i,j) = 0.0
             visc2p(i,j) = 0.0
             visc2q(i,j) = 0.0
             visc4p(i,j) = 0.0

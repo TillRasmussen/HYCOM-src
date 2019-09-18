@@ -1952,7 +1952,7 @@
       n=mod(nstep0+1,2)+1
       call momtum_hs(n,m)
 #endif
-
+      call momtum_init()
 
 #if defined (USE_NUOPC_CESMBETA)
 ! --- Initialization of CICE export
