@@ -101,7 +101,6 @@
 !     real*8    wtime1(10),wtime2(20,kdm),wtimes
 !
 # include "stmt_fns.h"
-# include "internal_kappaf.h"
 
 !
 !
@@ -549,6 +548,12 @@
         call xctilr(surty,1,1, 6,6, halo_pv)
       endif !windf
 !
+      return
+!
+      contains
+
+      include 'internal_kappaf.h'
+
       end subroutine momtum_hs
 !
       real function cd_coare(wind,vpmx,airt,sst)
