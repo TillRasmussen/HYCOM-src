@@ -1084,8 +1084,8 @@
                    pointer_filename,restart_write)
 !
       integer,      intent(in), optional :: mpiCommunicator
-      real,         intent(in), optional :: hycom_start_dtg
-      real,         intent(in), optional :: hycom_end_dtg
+      real(8),         intent(in), optional :: hycom_start_dtg
+      real(8),         intent(in), optional :: hycom_end_dtg
       character*80, intent(in), optional :: pointer_filename
       logical,      intent(in), optional :: restart_write
       logical       restart_cpl
@@ -2131,16 +2131,14 @@
                  (endtime,pointer_filename,restart_write)
 !
 ! --- Calling parameters
-      real,         intent(in), optional :: endtime
+      real(8),         intent(in), optional :: endtime
       character*80, intent(in), optional :: pointer_filename
       logical,      intent(in), optional :: restart_write
       real :: ssh_n,ssh_s,ssh_e,ssh_w,dhdx,dhdy
       real :: maskn,masks,maske,maskw
       real :: dp1,usur1,vsur1,psur1,dp2,usur2,vsur2,psur2,thksur, &
               utot,vtot
-#if defined (DMI_ATM_COUPLED)
       real :: inv_cplifq
-#endif
       real :: nstep2_cpl
       integer :: ld
       logical :: restart_cpl
@@ -2684,7 +2682,7 @@
           do i=1,ii
             if (SEA_P) then
 ! ---         always use mass-conserving diagnostics
-              oneta(i,j,n) = 1.0 + pbavg(i,j,n)/pbot(i,j)
+              oneta(i,j,n) = max( oneta0, 1.0 + pbavg(i,j,n)/pbot(i,j) )
               if     (tidflg.gt.0) then
                 util2(i,j)=(srfhgt(i,j)/g)**2*scp2(i,j)
               endif
@@ -3672,7 +3670,7 @@
       inv_cplifq= 1./icefrq
 #else
       end_of_run_cpl = .true.
-#endif
+#endif    
 !$OMP     PARALLEL DO PRIVATE(j,i) &
 !$OMP             SCHEDULE(STATIC,jblk)
       do j=1-nbdy,jj+nbdy
@@ -4093,3 +4091,4 @@
 !> Dec. 2018 - added /* USE_NUOPC_CESMBETA */ macro for CESMBETA coupled simulation
 !> Dec. 2018 - added /* ESPC_COUPLE */ macro for coupling with NAVYESPC
 !> Feb. 2019 - replaced onetai by 1.0
+!> Sep. 2019 - added oneta0

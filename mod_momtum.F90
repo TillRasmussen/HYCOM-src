@@ -29,15 +29,19 @@
       real, save, dimension(1-nbdy:idm+nbdy,1-nbdy:jdm+nbdy) :: &
 #endif
         stress,stresx,stresy,dpmx,thkbop, &
-        defor1, defor2, & ! deformation components
+        defor1, defor2, &  ! deformation components
         uflux1,vflux1,  &  ! mass fluxes
-        potvor          ! potential vorticity 
+        potvor             ! potential vorticity 
 
       contains
 
       subroutine momtum_init()
-! Initialization of arrays for momentum equation
       implicit none
+!
+! --- ----------------------------------------------
+! --- Initialization of arrays for momentum equation
+! --- ----------------------------------------------
+!
 #if defined(RELO)
       allocate( &
               defor1(1-nbdy:idm+nbdy,1-nbdy:jdm+nbdy), &
@@ -50,20 +54,20 @@
               stresy(1-nbdy:idm+nbdy,1-nbdy:jdm+nbdy), &
               dpmx(1-nbdy:idm+nbdy,1-nbdy:jdm+nbdy), &
               thkbop(1-nbdy:idm+nbdy,1-nbdy:jdm+nbdy) )
-        call mem_stat_add( 10*(idm+2*nbdy)*(jdm+2*nbdy) )
+      call mem_stat_add( 10*(idm+2*nbdy)*(jdm+2*nbdy) )
 #endif
-        stress = 0. !r_init
-        stresx = r_init
-        stresy = r_init
-        dpmx = r_init
-        thkbop = r_init
-! All of these should be zero on land.
-        defor1 = 0. 
-        defor2 = 0.
-        uflux1 = 0.
-        vflux1 = 0.
-        potvor = 0.
-
+      stress = 0.0
+      stresx = r_init
+      stresy = r_init
+      dpmx   = r_init
+      thkbop = r_init
+! --- all of these should be zero on land.
+      defor1 = 0.0
+      defor2 = 0.0
+      uflux1 = 0.0
+      vflux1 = 0.0
+      potvor = 0.0
+      return
       end  subroutine momtum_init
 
       subroutine momtum_hs(m,n)
@@ -530,8 +534,7 @@
                 surty(i,j) = 0.0
               elseif (iceflg.eq.2 .and. si_c(i,j).gt.0.0) then
 ! ---           allow for ice-ocean stress
-#if defined (USE_NUOPC_CESMBETA)  
-!&& defined (DMI_ATM_COUPLED)
+#if defined (USE_NUOPC_CESMBETA)
 ! ---           ice-ocean stress already in surtx and surty
 #else
                 uimo = si_u(i,j) - usur
@@ -2145,7 +2148,6 @@
 ! ---     note that hfharm is 0.5*harmonic mean
 !
           do i=max(1-margin,ifu(j,l)-1),min(ii+margin,ilu(j,l))
-          
             uflux1(i,j)= &
               ((vis2u(i,j)+vis2u(i+1,j))*(utotn(i,j)-utotn(i+1,j))+ &
                (vis4u(i,j)+vis4u(i+1,j))*(dl2u( i,j)-dl2u( i+1,j)) ) &
@@ -2817,9 +2819,6 @@
       do j=1,jj
         do i=1,ii
           if (SEA_P) then
-            write(600+mnproc,*) dispqd_mn(i,j), dpo(i,j,k,m),&
-            vtotn(i,j+1), stress(i,j+1), vtotn(i,j), &
-            stress(i,j) 
             if     (tidflg.gt.0 .and. drgscl.ne.0.0 &
                                 .and. thkdrg.gt.0.0) then
               displd_mn(i,j) = displd_mn(i,j) +  &
@@ -5591,3 +5590,4 @@
 !> Dec  2018 - add /* USE_NUOPC_CESMBETA */ macro for coupled simulation
 !> Dec  2018 - use max (not average) to map drag from p to u and v grids
 !> Feb. 2019 - added montg_c correction to psikk (sshflg.eq.2)
+!> Sep. 2019 - added momtum_init

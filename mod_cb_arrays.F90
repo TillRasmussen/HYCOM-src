@@ -847,7 +847,7 @@
 
 !
 #  if defined(RELO)
-      real, target, allocatable,dimension (:,:) :: &
+      real(8), target, allocatable,dimension (:,:) :: &
              sic_import, & !Sea Ice Concentration
             sitx_import, & !Sea Ice X-Stress
             sity_import, & !Sea Ice Y-Stress
@@ -895,7 +895,7 @@
 ! --- tripolar grid
       logical ltripolar
 ! --- import from coupler
-      real ocn_cpl_frq
+      real(8) ocn_cpl_frq
 ! --- precipitation factor for coupled simulation
       real pcp_fact  ! always 1. : no precipiation adjustment
 ! ---  import from atm
@@ -1861,3 +1861,4 @@
 !> Dec. 2018 - added /* USE_NUOPC_GENERIC */ and /* ESPC_COUPLE */ macros
 !> Feb. 2019 - added montg_c
 !> Feb. 2019 - removed onetai 
+   
