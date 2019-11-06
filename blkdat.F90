@@ -2220,7 +2220,7 @@
 !
 ! --- initialize from climatology (update relaxf and relaxs)?
       if     (iniflg.eq.2) then
-        if     (.not. linit) then
+        if     (linit) then
           relaxf = .true.
           relaxs = .false.
         endif !initialize from climatology
