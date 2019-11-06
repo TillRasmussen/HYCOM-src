@@ -2063,8 +2063,13 @@
 !
       integer, parameter :: mnp=1       !mnflg for xciegt and xciput
                                         !0 == all tasks; 1 == task 1;
-      integer, parameter :: npline=1    !update pline every npline time steps
-                                        !odd, can be 1
+#if defined(LATBDT_NPLINE3)
+      integer, parameter :: npline=3    !set by a CPP macro
+#else
+      integer, parameter :: npline=1    !usually 1
+#endif
+                                        !update pline every npline time steps
+                                        !npline is odd, can be 1
       integer, parameter :: nchar=120
 !
       logical     lfatal,lfatalp
@@ -2726,8 +2731,8 @@
           endif !kdport
         enddo  !l=1,nports
         if     (ldebug_latbdt .and. mnproc.eq.1) then
-        write(lp,*) 
-        call flush(lp)
+          write(lp,*) 
+          call flush(lp)
         endif !ldebug_latbdt
 
         if     (tidflg.eq.1 .or. tidflg.eq.3) then
@@ -2745,7 +2750,7 @@
 !
         call xcsync(flush_lp)
         return
-      if ((lll.eq.0) .or. (n.eq.0)) return
+      endif  !lcount.eq.1
 
       if     (.not.allocated(utrans)) then
         allocate(utrans(nportpts), &
@@ -4341,3 +4346,4 @@
 !> Oct  2019 -- added ltrans_latbdt for port transport diagnostic
 !> Oct  2019 -- update pline in latbdt every npline time steps
 !> Oct  2019 -- smooth the Browning&Kreiss normal transport
+!> Oct  2019 -- npline=3 via a CPP macro

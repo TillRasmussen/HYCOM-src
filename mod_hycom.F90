@@ -1176,13 +1176,34 @@
 !
 ! --- machine-specific initialization
       call machine
+
+
+! --- model is to be integrated from time step 'nstep1' to 'nstep2'
+! either get time from coupler or read from limits
+      if ((present(hycom_start_dtg)) .and. (present(hycom_end_dtg))) then
+         day1 = hycom_start_dtg
+         day2 = hycom_end_dtg
+      elseif ((present(hycom_start_dtg)) .or. (present(hycom_end_dtg))) then
+        if (mnproc.eq.1) then
+         write(lp,'(/ a /)') 'error in hycom - Both optional parameters &
+               &''Must be present if one is present'
+         call flush(lp)
+        endif !1st tile
+        call xcstop('(hycom)')
+               stop '(hycom)'   !won't get here
+      else
+        open( unit=uoff+99,file=trim(flnminp)//'limits')
+        read(      uoff+99,*) day1,day2
+        close(unit=uoff+99)
+      endif
+! --- non-positive day1 indicates a new initialization, or
+! --- the start of a yrflag==3 case.
+      linit =day1.le.0.0 
+      day1  =abs(day1)
+      dtime=day1
 !
 ! --- initialize scalars
-      if (present(hycom_start_dtg)) then
-          call blkdat(hycom_start_dtg)  !must call before zaiost
-      else
-          call blkdat  !must call before zaiost
-      endif
+      call blkdat(linit)  !must call before zaiost
 !
 ! --- initialize array i/o.
       call zaiost
@@ -1205,10 +1226,13 @@
 ! --- initiate named-pipe comparison utility
       call pipe_init
 !
+      nstep1=nint(dtime*(86400.0d0/baclin))
       nts_ice = icpfrq                     !no. time steps between ice coupling
       nts_day = nint(86400.0d0/baclin)     !no. time steps per day
       dsmall  = baclin/86400.0d0 * 0.25d0  !1/4 of a time step in days
       dsmall2 = dsmall*2.0d0
+      dtime=(nstep1/nts_day)+mod(nstep1,nts_day)*(baclin/86400.0d0)             
+      day1 =dtime 
       if     (dsurfq.ge.1.0) then
         ddsurf = dsurfq
 !       write(6,'("Case 1 ddsurf =",G25.17)')ddsurf
@@ -1414,32 +1438,6 @@
 !
       call forfundf
 !
-! --- model is to be integrated from time step 'nstep1' to 'nstep2'
-      if ((present(hycom_start_dtg)) .and. (present(hycom_end_dtg))) then
-         day1 = hycom_start_dtg
-         day2 = hycom_end_dtg
-      elseif ((present(hycom_start_dtg)) .or. (present(hycom_end_dtg))) then
-        if (mnproc.eq.1) then
-         write(lp,'(/ a /)') 'error in hycom - Both optional parameters &
-               &''Must be present if one is present'
-         call flush(lp)
-        endif !1st tile
-        call xcstop('(hycom)')
-               stop '(hycom)'   !won't get here
-      else
-        open( unit=uoff+99,file=trim(flnminp)//'limits')
-        read(      uoff+99,*) day1,day2
-        close(unit=uoff+99)
-      endif
-! --- non-positive day1 indicates a new initialization, or
-! --- the start of a yrflag==3 case.
-      linit =day1.le.0.0 
-      day1  =abs(day1)
-!
-      dtime=day1
-      nstep1=nint(dtime*(86400.0d0/baclin))
-      dtime=(nstep1/nts_day)+mod(nstep1,nts_day)*(baclin/86400.0d0)
-      day1 =dtime
 !
 #if defined (ESPC_COUPLE)
       nstep1_cpl=nstep1
@@ -3677,10 +3675,9 @@
         do i=1-nbdy,ii+nbdy
           if (SEA_P) then
              sshm(i,j) = sshm(i,j) + srfhgt(i,j)
-
              um(i,j)  = um(i,j)  + 0.5*(    u(i,j,1,1)+    u(i,j,1,2)) 
-             ubm(i,j) = ubm(i,j) + 0.5*(ubavg(i,j,  1)+ubavg(i,j,  2)) 
 
+             ubm(i,j) = ubm(i,j) + 0.5*(ubavg(i,j,  1)+ubavg(i,j,  2)) 
              vm(i,j)  = vm(i,j)  + 0.5*(    v(i,j,1,1)+    v(i,j,1,2)) 
              vbm(i,j) = vbm(i,j) + 0.5*(vbavg(i,j,  1)+vbavg(i,j,  2)) 
 
@@ -3750,8 +3747,8 @@
 !!Alex calculation of u and v surf for export to CICE
 !$OMP     PARALLEL DO PRIVATE(j,i) &
 !$OMP             SCHEDULE(STATIC,jblk)
-        do j=1-nbdy,jj+nbdy
-          do i=1-nbdy,ii+nbdy
+        do j=1,jj
+          do i=1,ii
            if (SEA_P) then
 ! ---      average currents over top thkcdw meters
              utot = 0.5*(um(i  ,j) + ubm(i  ,j) + &
@@ -3813,7 +3810,6 @@
           enddo
         enddo
 !$OMP END PARALLEL DO
-
       endif ! end_of_run_cpl
 ! --- restart
       if (present(restart_write)) then
