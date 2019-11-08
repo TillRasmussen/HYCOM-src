@@ -746,7 +746,8 @@
 ! --- 'jerlv0' = initial jerlov water type (1 to 5; 0 for kpar, -1 for chl)
 ! --- 'iceflg' = sea ice model flag   (0=none,1=energy loan,2=coupled/esmf)
 ! --- 'ishelf' = ice shelf flag       (0=none,1=ice shelf over ocean)
-! --- 'wndflg' = wind str. input flag (0=none,1=on u/v grid,2,3=on p grid)
+! --- 'wndflg' = wind stress input flag (0=none,1=uv-grid,2,3=p-grid,4,5=wnd10m)
+! --- 'amoflg' = relative wind     flag (0=U10:wndflg=-4,-5;1=U10-Uocn:wndflg=4,5)
 ! --- 'ustflg' = ustar forcing flag          (3=input,1=wndspd,2=stress)
 ! --- 'flxflg' = thermal forcing flag (0=none,3=net-flux,1,2,4=sst-based)
 ! --- 'empflg' = E-P     forcing flag (0=none,3=net_E-P, 1,2,4=sst-based_E)
@@ -791,7 +792,7 @@
                      ntracr,trcflg(mxtrcr), &
                      clmflg,dypflg,iniflg,lbflag,mapflg,yrflag,sshflg, &
                      iversn,iexpt,jerlv0, &
-                     iceflg,ishelf,icmflg,wndflg,ustflg, &
+                     iceflg,ishelf,icmflg,wndflg,amoflg,ustflg, &
                      flxflg,empflg,dswflg,albflg,lwflag,sstflg,sssflg, &
                      empbal,sssbal, &
                      difsmo,disp_count
@@ -1372,11 +1373,11 @@
               wflice = r_init
               wflfrz = 0.0     !diagnostic, icloan only
               sflice = r_init
-                si_c = r_init
+                si_c = 0.0 !r_init
                 si_h = r_init
                 si_t = r_init
-                si_u = r_init
-                si_v = r_init
+                si_u = 0.0 ! r_init
+                si_v = 0.0 ! r_init
                si_tx = r_init
                si_ty = r_init
 !
@@ -1879,3 +1880,4 @@
 !> Sep. 2019 - added oneta0
 !> Oct. 2019 - added lbmont
 !> Oct. 2019 - added rmunvu and rmunvv, and layer 1 nested velocity ranges
+!> Nov. 2019 - added amoflg

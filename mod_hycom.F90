@@ -3675,9 +3675,10 @@
         do i=1-nbdy,ii+nbdy
           if (SEA_P) then
              sshm(i,j) = sshm(i,j) + srfhgt(i,j)
-             um(i,j)  = um(i,j)  + 0.5*(    u(i,j,1,1)+    u(i,j,1,2)) 
 
-             ubm(i,j) = ubm(i,j) + 0.5*(ubavg(i,j,  1)+ubavg(i,j,  2)) 
+             um(i,j)  = um(i,j)  + 0.5*(    u(i,j,1,1)+    u(i,j,1,2)) 
+             ubm(i,j) = ubm(i,j) + 0.5*(ubavg(i,j,  1)+ubavg(i,j,  2))
+
              vm(i,j)  = vm(i,j)  + 0.5*(    v(i,j,1,1)+    v(i,j,1,2)) 
              vbm(i,j) = vbm(i,j) + 0.5*(vbavg(i,j,  1)+vbavg(i,j,  2)) 
 
@@ -3810,6 +3811,7 @@
           enddo
         enddo
 !$OMP END PARALLEL DO
+
       endif ! end_of_run_cpl
 ! --- restart
       if (present(restart_write)) then
