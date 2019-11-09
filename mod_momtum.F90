@@ -551,33 +551,16 @@
                 surty(i,j) = 0.0
               elseif (iceflg.eq.2 .and. si_c(i,j).gt.0.0) then
 ! ---           allow for ice-ocean stress
-#if defined (USE_NUOPC_CESMBETA) && defined (DMI_ATM_COUPLED)
+#if defined (USE_NUOPC_CESMBETA) 
 ! ---           ice-ocean stress already in surtx and surty
+#else if defined (DMI_ICE_COUPLED)
+                surtx(i,j) = (1.0-si_c(i,j))*surtx(i,j) + &
+                                  si_c(i,j) *si_tx(i,j)
+                surty(i,j) = (1.0-si_c(i,j))*surty(i,j) + &
+                                  si_c(i,j) *si_ty(i,j)
+
+
 #else
-                if (si_u(i,j) > 100.) then
-                   write(6,*) 'siu', si_u(i,j), usur, si_v(i,j), vsur &
-                   ,si_c(i,j)
-                endif
-                if (si_v(i,j) > 100.) then
-                   write(6,*) 'siv', si_u(i,j), usur, si_v(i,j), vsur &
-                    ,si_c(i,j)
-
-                endif
-                if (si_c(i,j) > 100.) then
-                   write(6,*) 'sic', si_u(i,j), usur, si_v(i,j), vsur &
-                   ,si_c(i,j)
-                endif
-                if (usur > 100.) then
-                   write(6,*) 'usur', si_u(i,j), usur, si_v(i,j), vsur &
-                   ,si_c(i,j)
-               endif
-                if (vsur > 100.) then
-                   write(6,*) 'vsur', si_u(i,j), usur, si_v(i,j), vsur &
-                   ,si_c(i,j)
-                endif
-                call flush(6)
-
-
                 uimo = si_u(i,j) - usur
                 vimo = si_v(i,j) - vsur
                 simo = sqrt( uimo**2 + vimo**2 )
