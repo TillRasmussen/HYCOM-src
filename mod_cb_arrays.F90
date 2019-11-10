@@ -1376,8 +1376,8 @@
                 si_c = 0.0 !r_init
                 si_h = r_init
                 si_t = r_init
-                si_u = 0.0 ! r_init
-                si_v = 0.0 ! r_init
+                si_u = r_init
+                si_v = r_init
                si_tx = r_init
                si_ty = r_init
 !
