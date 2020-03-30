@@ -94,15 +94,14 @@
       parameter (tfrz_n=-1.79)  !slightly above -1.8
 !
 #if defined (USE_NUOPC_CESMBETA)
-      logical, save, public  :: end_of_run_cpl   !set in HYCOM_Run for coupling
 ! --- ntavg number of time step between coupling sequence (CESM)
-      integer :: ntavg
+      integer :: ntavg, nstep2_cpl
 #endif
 #if defined (ESPC_COUPLE)
 ! ESPC -- add
-      logical, save, public  :: end_of_run_cpl !set in HYCOM_Run for coupling
       real, save ::  nstep1_cpl,nstep2_cpl
 #endif
+      logical, save, public  :: end_of_run_cpl !set in HYCOM_Run for coupling
 
 #if defined(USE_ESMF4)
 !
@@ -1078,25 +1077,24 @@
       type(ESMF_State)     :: expState
       type(ESMF_Clock)     :: extClock
       integer, intent(out) :: rc
-#else  
+#else 
       subroutine HYCOM_Init &
                   (mpiCommunicator,hycom_start_dtg,hycom_end_dtg, &
-                   pointer_filename,restart_write)
+                   pointer_filename)
 !
       integer,      intent(in), optional :: mpiCommunicator
       real(8),         intent(in), optional :: hycom_start_dtg
       real(8),         intent(in), optional :: hycom_end_dtg
       character*80, intent(in), optional :: pointer_filename
-      logical,      intent(in), optional :: restart_write
       logical       restart_cpl
       integer :: mpi_comm_ocean,istat
-#endif
+#endif /* USE_ESMF4:USE_NUOPC_CESMBETA:else */
 #if defined(USE_NUOPC_CESMBETA)
       real :: ssh_n,ssh_s,ssh_e,ssh_w,dhdx,dhdy
       real :: maskn,masks,maske,maskw
       real :: dp1,usur1,vsur1,psur1,dp2,usur2,vsur2,psur2,thksur, &
               utot,vtot
-#endif /* USE_NUOPC_CESMBETA:ESPC_COUPLE */
+#endif /*USE_NUOPC_CESMBETA */
 !
 ! --- Initialize (before the 1st time step).
 !
@@ -1177,6 +1175,20 @@
 ! --- machine-specific initialization
       call machine
 
+!
+! --- initialize common variables.
+!
+#if defined(OCEANS2)
+      if     (nocean.eq.2) then
+! ---   slave HYCOM works from ./OCEAN2
+        flnminp = './OCEAN2/'
+      else
+! ---   master HYCOM
+        flnminp = './'
+      endif
+#else
+      flnminp = './'
+#endif
 
 ! --- model is to be integrated from time step 'nstep1' to 'nstep2'
 ! either get time from coupler or read from limits
@@ -1185,20 +1197,24 @@
          day2 = hycom_end_dtg
       elseif ((present(hycom_start_dtg)) .or. (present(hycom_end_dtg))) then
         if (mnproc.eq.1) then
-         write(lp,'(/ a /)') 'error in hycom - Both optional parameters &
-               &''Must be present if one is present'
+         write(lp,*) 'error in hycom - Both hycom_start_dtg and &
+               &''hycom_end_dtg must be present if one is present'
          call flush(lp)
         endif !1st tile
         call xcstop('(hycom)')
                stop '(hycom)'   !won't get here
       else
+         if (mnproc.eq.1) then
+         write(lp,*)  trim(flnminp)//'limits'  
+         call flush(lp)
+        endif !1st tile
         open( unit=uoff+99,file=trim(flnminp)//'limits')
         read(      uoff+99,*) day1,day2
         close(unit=uoff+99)
       endif
 ! --- non-positive day1 indicates a new initialization, or
 ! --- the start of a yrflag==3 case.
-      linit =day1.le.0.0 
+      linit =day1.le.0.0
       day1  =abs(day1)
       dtime=day1
 !
@@ -1753,7 +1769,10 @@
           w2=0.0
           w3=0.0
 !!Alex no file flux on restart
-#if defined (USE_NUOPC_CESMBETA) && defined (DMI_ATM_COUPLED)
+#if defined (DMI_CICE_COUPLED)
+        call forfunh(dtime0)
+        if (mnproc.eq.1) print*,'forfunh(dtime0) HYCOMCICE'
+#elif defined (USE_NUOPC_CESMBETA)
           if (.not. (cpl_swflx  .and. cpl_lwmdnflx .and. cpl_lwmupflx &
               .and.  cpl_taux   .and. cpl_tauy     .and. cpl_precip)  &
               .and.  linit ) &
@@ -1791,11 +1810,11 @@
             if (mnproc.eq.1) print*,'coupler forcing HYCOM_IN_CESM'
           endif ! no coupled fields and restart
 
-#  if defined (ARCTIC)
+#if defined (ARCTIC)
           ltripolar=.true.
-#  else
+#else
           ltripolar=.false.
-#  endif /* ARCTIC:else */
+#endif /* ARCTIC:else */
 #else
           call forfunh(dtime0)
 #endif /* USE_NUOPC_CESMBETA:else */
@@ -1851,7 +1870,7 @@
         lr1=2
         lr2=3
         lr3=4
-#if defined (USE_NUOPC_CESMBETA)
+#if defined (USE_NUOPC_CESMBETA)  &&  !defined (DMI_CICE_COUPLED)
          if (.not. (cpl_orivers .and. cpl_irivers) &
              .and.  linit ) then
            call rdrivr(mr0,lr0)
@@ -2098,7 +2117,6 @@
         if (mnproc.eq.1) then
           call mem_stat_print('mean_allocate:')
         endif !1st tile
-!        call mean_zero(DBLE(time))
         nstep=nstep0
         time =dtime0
         call mean_zero(DBLE(time))
@@ -2124,7 +2142,7 @@
       type(ESMF_State)     :: expState
       type(ESMF_Clock)     :: extClock
       integer, intent(out) :: rc
-#elif defined (USE_NUOPC_CESMBETA) 
+#else 
       subroutine HYCOM_Run  &
                  (endtime,pointer_filename,restart_write)
 !
@@ -2132,22 +2150,16 @@
       real(8),         intent(in), optional :: endtime
       character*80, intent(in), optional :: pointer_filename
       logical,      intent(in), optional :: restart_write
+#endif
+#if defined (USE_NUOPC_CESMBETA)
       real :: ssh_n,ssh_s,ssh_e,ssh_w,dhdx,dhdy
       real :: maskn,masks,maske,maskw
       real :: dp1,usur1,vsur1,psur1,dp2,usur2,vsur2,psur2,thksur, &
               utot,vtot
       real :: inv_cplifq
-      real :: nstep2_cpl
       integer :: ld
-      logical :: restart_cpl
-#elif defined (ESPC_COUPLE)
-      subroutine HYCOM_Run(endtime)
-!
-! --- Calling parameters
-      real,         intent(in), optional :: endtime
-#else
-      subroutine HYCOM_Run
 #endif
+      logical :: restart_cpl
 !
 ! --- -------------------------
 ! --- execute a single timestep
@@ -2174,9 +2186,7 @@
 #endif
 ! --- initialize end_of_run
       end_of_run      = .false.   ! initialize on every entry
-#if defined (USE_NUOPC_CESMBETA)
       end_of_run_cpl  = .false.   ! initialize on every entry
-#endif
 
 ! --- letter 'm' refers to mid-time level (example: dp(i,j,k,m) )
 ! --- letter 'n' refers to old and new time level
@@ -2356,7 +2366,6 @@
 !
 ! --- set weights for quasi-hermite time interpolation for rivers.
       if     (priver) then
-#if defined (USE_NUOPC_CESMBETA)  && defined (DMI_ATM_COUPLED)
          if (.not. (cpl_orivers .and. cpl_irivers)) then
 ! ---   monthly fields.
             x=1.+mod(dtime+dyear0,dyear)/dmonth
@@ -2379,28 +2388,6 @@
             wr0=-.5*x *x1*x1
             wr3=-.5*x1*x *x
          endif
-#else
-! ---   monthly fields.
-         x=1.+mod(dtime+dyear0,dyear)/dmonth
-         if (int(x).ne.mr1) then
-            mr1=x
-            mr0=mod(mr1+10,12)+1
-            mr2=mod(mr1,   12)+1
-            mr3=mod(mr2,   12)+1
-            lt =lr0
-            lr0=lr1
-            lr1=lr2
-            lr2=lr3
-            lr3=lt
-            call rdrivr(mr3,lr3)
-         endif
-         x=mod(x,1.)
-         x1=1.-x
-         wr1=x1*(1.+x *(1.-1.5*x ))
-         wr2=x *(1.+x1*(1.-1.5*x1))
-         wr0=-.5*x *x1*x1
-         wr3=-.5*x1*x *x
-#endif /* USE_NUOPC_CESMBETA:else */
       endif
 !
 ! --- set weights for quasi-hermite time interpolation for temperature,
@@ -3650,7 +3637,9 @@
 ! --- end of coupling sequence
       ! stepable end-of-run condition
       ! endtime present means that "end_of_run_cpl" needs to be set correctly
-#if defined (DMI_ATM_COUPLED)
+#if defined (DMI_CICE_COUPLEd)
+      end_of_run_cpl = .true.
+#else
       nstep2_cpl=nint(endtime*(86400.0d0/baclin))
 
       if(mnproc.eq.1) print *,"mod_hycom,nstep,nstep2,nstep2_cpl =", &
@@ -3666,9 +3655,7 @@
 !!Alex
 !! add mean export field
       inv_cplifq= 1./icefrq
-#else
-      end_of_run_cpl = .true.
-#endif    
+#endif
 !$OMP     PARALLEL DO PRIVATE(j,i) &
 !$OMP             SCHEDULE(STATIC,jblk)
       do j=1-nbdy,jj+nbdy
@@ -3813,17 +3800,15 @@
 !$OMP END PARALLEL DO
 
       endif ! end_of_run_cpl
+#endif /* USE_NUOPC_CESMBETA */
 ! --- restart
-      if (present(restart_write)) then
+!TILL 28/3  I am a bit in doubt here whether it is correct
+      if (present(restart_write) ) then
           restart_cpl = restart_write .and. end_of_run_cpl
       else
           restart_cpl = .false.
       endif
-
       if (restrt .or. restart_cpl) then
-#else
-      if (restrt) then
-#endif /* USE_NUOPC_CESMBETA:else */
 
         call xctmr0(51)
 !
@@ -3852,9 +3837,6 @@
         call flush(lp)
         endif !1st tile
 !
-
-!
-#if defined (USE_NUOPC_CESMBETA)
         if (restart_cpl) then
           write(flnmra,'(a,i4.4,a,i3.3,a,i2.2)') &
                       &'restart_', iyear,'-',jday,'-',ihour
@@ -3870,12 +3852,6 @@
 !
         call restart_out(nstep,dtime, flnmra,flnmrb, nstep.ge.nstep2, &
                          restart_cpl )
-#else
-        flnmra = flnmrso  !.a extension added by restart_out
-        flnmrb = flnmrso  !.b extension added by restart_out
-!
-        call restart_out(nstep,dtime, flnmra,flnmrb, nstep.ge.nstep2)
-#endif /* USE_NUOPC_CESMBETA */
 !
 ! ---   set layer thickness (incl.bottom pressure) at u,v points
 ! ---   needed because restart_out may have modified dp
@@ -4026,8 +4002,10 @@
       write(nod,'(a)') 'normal stop'
       call flush(nod)
       endif !1st tile
+# if ! defined (ESPC_COUPLE)
       call xcstop('(normal)')  !calls xctmrp
              stop '(normal)'   !won't get here
+#endif
       end subroutine HYCOM_Final
 #endif /* USE_ESMF4:else */
 

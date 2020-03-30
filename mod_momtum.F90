@@ -343,22 +343,6 @@
       if     (windf) then
         margin =0
 
-#if defined (USE_NUOPC_CESMBETA)
-!jc   weights for the coupled forcing
-      if(cpl_implicit) then
-        if(nstep2_cpl.eq.0 .or. (nstep1_cpl.eq.nstep2_cpl)) then
-          cpl_w2=1.
-          cpl_w3=0.
-        else
-          cpl_w2=(nstep-nstep1_cpl)/(nstep2_cpl-nstep1_cpl)
-          cpl_w3=1.-cpl_w2
-        endif
-      else
-         cpl_w2=1.0
-         cpl_w3=0.
-      endif
-#endif
-!
 !$OMP   PARALLEL DO PRIVATE(j,i,k, &
 !$OMP                       dpsur,psur,usur,vsur,thksur, &
 !$OMP                       airt,vpmx,wndx,wndy,wind,cdw,rair, &
@@ -391,10 +375,8 @@
               endif !usur,vsur
 !
               if     (wndflg.eq.2 .or. wndflg.eq.3) then ! tau on p grid
-#if defined (USE_NUOPC_CESMBETA) && defined (DMI_ATM_COUPLED)
                 if (cpl_taux) then
-                  surtx(i,j) = imp_taux(i,j,1)*cpl_w2 &
-                             + imp_taux(i,j,2)*cpl_w3
+                  surtx(i,j) = imp_taux(i,j,1)
                 elseif (natm.eq.2) then
                   surtx(i,j) = taux(i,j,l0)*w0+taux(i,j,l1)*w1
                 else
@@ -403,27 +385,15 @@
                 endif ! cpl_taux
 
                 if (cpl_tauy) then
-                  surty(i,j) = imp_tauy(i,j,1)*cpl_w2 &
-                             + imp_tauy(i,j,2)*cpl_w3
+                  surty(i,j) = imp_tauy(i,j,1)
                 elseif (natm.eq.2) then
                   surty(i,j) = tauy(i,j,l0)*w0+tauy(i,j,l1)*w1
                 else
                   surty(i,j) = tauy(i,j,l0)*w0+tauy(i,j,l1)*w1 &
                              + tauy(i,j,l2)*w2+tauy(i,j,l3)*w3
                 endif ! cpl_tauy
-#else
-                if     (natm.eq.2) then
-                  surtx(i,j) = taux(i,j,l0)*w0+taux(i,j,l1)*w1
-                  surty(i,j) = tauy(i,j,l0)*w0+tauy(i,j,l1)*w1
-                else
-                  surtx(i,j) =   taux(i,j,l0)*w0+taux(i,j,l1)*w1 &
-                                +taux(i,j,l2)*w2+taux(i,j,l3)*w3
-                  surty(i,j) =   tauy(i,j,l0)*w0+tauy(i,j,l1)*w1 &
-                                +tauy(i,j,l2)*w2+tauy(i,j,l3)*w3
-                endif !natm
-#endif /* USE_NUOPC_CESMBETA */
               elseif (wndflg.eq.1) then ! tau on u&v grids - NOT RECOMMEDED
-#if defined (USE_NUOPC_CESMBETA) && defined (DMI_ATM_COUPLED)
+#if defined (USE_NUOPC_CESMBETA) && !defined (DMI_CICE_COUPLED)
                  if     (mnproc.eq.1) then
                     write(lp,*)
                     write(lp,*) 'error in momtum - wndflg should be '
@@ -431,7 +401,7 @@
                  endif !1st tile
                  call xcstop('(momtum)')
                  stop '(momtum)'
-#else
+#endif /* USE_NUOPC_CESMBETA   and DMI_CICE_COUPLED*/
                 if     (natm.eq.2) then
                   surtx(i,j) = ( (taux(i,j,l0)+taux(i+1,j,l0))*w0 &
                                 +(taux(i,j,l1)+taux(i+1,j,l1))*w1)*0.5
@@ -447,11 +417,10 @@
                                 +(tauy(i,j,l2)+tauy(i,j+1,l2))*w2 &
                                 +(tauy(i,j,l3)+tauy(i,j+1,l3))*w3)*0.5
                 endif !natm
-#endif /* USE_NUOPC_CESMBETA */
               else !wndflg.eq.4,5,6
 ! ---           calculate stress from 10m winds using cd_coare or cd_core2
 ! ---           for cd_core2, vpmx (vapmix) is specific humidity
-#if defined (USE_NUOPC_CESMBETA) && defined (DMI_ATM_COUPLED)
+#if defined (USE_NUOPC_CESMBETA) && !defined (DMI_CICE_COUPLED)
                  if     (mnproc.eq.1) then
                     write(lp,*)
                     write(lp,*) 'error in momtum - wndflg should be '
@@ -459,7 +428,7 @@
                  endif !1st tile
                  call xcstop('(momtum)')
                  stop '(momtum)'
-#else
+#endif /* DMI_CICE_COUPLED and USE_NUOPC_CESMBETA */
                 if     (natm.eq.2) then
                   airt = airtmp(i,j,l0)*w0+airtmp(i,j,l1)*w1
                   vpmx = vapmix(i,j,l0)*w0+vapmix(i,j,l1)*w1
@@ -538,7 +507,7 @@
                     surty(i,j) = rair*cdw*wind*wndy
                   endif !amoflg
                 endif
-#endif /* USE_NUOPC_CESMBETA */
+
               endif !wndflg
 !
               if     (stroff) then
@@ -551,15 +520,13 @@
                 surty(i,j) = 0.0
               elseif (iceflg.eq.2 .and. si_c(i,j).gt.0.0) then
 ! ---           allow for ice-ocean stress
-#if defined (USE_NUOPC_CESMBETA) && defined (DMI_ATM_COUPLED)
-! ---           ice-ocean stress already in surtx and surty
-#elif defined (DMI_ICE_COUPLED)
+#if defined (DMI_CICE_COUPLED)
                 surtx(i,j) = (1.0-si_c(i,j))*surtx(i,j) + &
-                                  si_c(i,j) *si_tx(i,j)
+                             si_c(i,j) *si_tx(i,j)
                 surty(i,j) = (1.0-si_c(i,j))*surty(i,j) + &
                                   si_c(i,j) *si_ty(i,j)
-
-
+#elif defined (USE_NUOPC_CESMBETA)
+! ---           ice-ocean stress already in surtx and surty
 #else
                 uimo = si_u(i,j) - usur
                 vimo = si_v(i,j) - vsur

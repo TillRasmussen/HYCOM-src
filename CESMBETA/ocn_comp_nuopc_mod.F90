@@ -400,7 +400,7 @@ module ocn_comp_nuopc_mod
     ! Call into the HYCOM initialization  
     call HYCOM_Init(mpiComm, & ! -->> call into HYCOM <<--
        hycom_start_dtg=l_startTime_r8, hycom_end_dtg=stopTime_r8, &
-       pointer_filename=pointer_filename,  restart_write=restart_write)
+       pointer_filename=pointer_filename)
 
     call ESMF_LOGWRITE("AFTER HYCOM_INIT", ESMF_LOGMSG_INFO, rc=rc)
 

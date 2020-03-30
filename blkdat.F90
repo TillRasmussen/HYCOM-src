@@ -19,17 +19,6 @@
 !
 ! --- initialize common variables.
 !
-#if defined(OCEANS2)
-      if     (nocean.eq.2) then
-! ---   slave HYCOM works from ./OCEAN2
-        flnminp = './OCEAN2/'
-      else
-! ---   master HYCOM
-        flnminp = './'
-      endif
-#else
-      flnminp = './'
-#endif
       open(unit=uoff+99,file=trim(flnminp)//'blkdat.input')  !on all nodes
 !
 ! --- 'lp' = logical unit number for printer output
@@ -1401,7 +1390,9 @@
       mxlmy = mlflag.eq.5
 !
       if (mxlmy) then
-#if ! defined(RELO)
+#if defined(RELO)
+        kkmy25 = kk
+#else
         if (kkmy25.ne.kdm) then
           if (mnproc.eq.1) then
           write(lp,'(/ a /)')  &
